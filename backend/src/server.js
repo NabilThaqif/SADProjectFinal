@@ -45,6 +45,17 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({ message: 'Server is running' });
 });
 
+// Database connection check
+app.get('/api/db-check', async (req, res) => {
+  try {
+    const admin = require('mongoose').connection.db.admin();
+    const status = await admin.ping();
+    res.status(200).json({ message: 'MongoDB connected', status });
+  } catch (error) {
+    res.status(500).json({ message: 'MongoDB connection failed', error: error.message });
+  }
+});
+
 // Socket.io connection handling
 io.on('connection', (socket) => {
   console.log('New user connected:', socket.id);
@@ -118,3 +129,4 @@ const startServer = async () => {
 startServer();
 
 module.exports = app;
+

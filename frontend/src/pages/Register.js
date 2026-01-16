@@ -32,6 +32,26 @@ export const Register = () => {
     setLoading(true);
     
     try {
+      // Validate required fields before submission
+      if (!formData.username || !formData.password || !formData.firstName || !formData.lastName || !formData.phoneNumber) {
+        toast.error('Please fill in all required fields');
+        setLoading(false);
+        return;
+      }
+
+      if (accountType === 'driver' && (!formData.carModel || !formData.carColor || !formData.carRegistrationNumber)) {
+        toast.error('Please fill in all vehicle details for driver registration');
+        setLoading(false);
+        return;
+      }
+
+      // Validate phone number format (basic check)
+      if (!/^[\d+\-\s()]{9,}$/.test(formData.phoneNumber)) {
+        toast.error('Please enter a valid phone number');
+        setLoading(false);
+        return;
+      }
+
       const userData = {
         ...formData,
         accountType
@@ -41,7 +61,10 @@ export const Register = () => {
       toast.success(`${accountType === 'passenger' ? 'Passenger' : 'Driver'} registered successfully!`);
       navigate(accountType === 'passenger' ? '/passenger/dashboard' : '/driver/dashboard');
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Registration failed');
+      console.error('Registration error:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Registration failed. Please try again.';
+      console.error('Detailed error:', errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }

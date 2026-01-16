@@ -58,6 +58,8 @@ exports.register = async (req, res) => {
         user: {
           id: driver._id,
           username: driver.username,
+          firstName: driver.firstName,
+          lastName: driver.lastName,
           accountType: driver.accountType
         }
       });
@@ -81,6 +83,8 @@ exports.register = async (req, res) => {
         user: {
           id: passenger._id,
           username: passenger.username,
+          firstName: passenger.firstName,
+          lastName: passenger.lastName,
           accountType: passenger.accountType
         }
       });

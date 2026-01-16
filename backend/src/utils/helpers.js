@@ -27,9 +27,10 @@ const validateEmail = (email) => {
 };
 
 const validatePhoneNumber = (phone) => {
-  // Malaysia phone number format
-  const phoneRegex = /^(\+?6?01)[0-46-9]-?[0-9]{7,8}$/;
-  return phoneRegex.test(phone);
+  // Accept various phone formats
+  // Allows: +60123456789, 0123456789, 60123456789, 123456789
+  const phoneRegex = /^(\+?6?0?)?[0-9]{9,11}$/;
+  return phoneRegex.test(phone) && phone.replace(/\D/g, '').length >= 9;
 };
 
 module.exports = {
