@@ -1,23 +1,47 @@
-const Driver = require('../models/Driver');
-const Ride = require('../models/Ride');
-const Rating = require('../models/Rating');
-const Passenger = require('../models/Passenger');
-const Payment = require('../models/Payment');
+const { dbHelpers, collections } = require('../utils/database');
 
-// @desc    Update driver profile
-// @route   PUT /api/drivers/:id
-// @access  Private
+// Get driver profile
+exports.getDriverProfile = async (req, res) => {
+  try {
+    const { uid } = req.user;
+
+    const driver = await dbHelpers.getDocument(collections.drivers, uid);
+    if (!driver) {
+      return res.status(404).json({
+        success: false,
+        message: 'Driver profile not found',
+      });
+    }
+
+    res.json({
+      success: true,
+      driver,
+    });
+  } catch (error) {
+    console.error('Error getting driver profile:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Update driver profile
 exports.updateProfile = async (req, res) => {
   try {
-    const { firstName, lastName, phoneNumber, email, profilePicture, carModel, carColor, carRegistrationNumber, carPicture, bankAccountNumber, bankAccountHolder, bankName } = req.body;
-    
-    const updateData = {};
-    if (firstName) updateData.firstName = firstName;
-    if (lastName) updateData.lastName = lastName;
-    if (phoneNumber) updateData.phoneNumber = phoneNumber;
-    if (email) updateData.email = email;
-    if (profilePicture) updateData.profilePicture = profilePicture;
-    if (carModel) updateData.carModel = carModel;
+    const { uid } = req.user;
+    const {
+      firstName,
+      lastName,
+      phoneNumber,
+      email,
+      carModel,
+      carColor,
+      carRegistration,
+      bankAccountNumber,
+      bankAccountName,
+      bankName,
+    } = req.body;
     if (carColor) updateData.carColor = carColor;
     if (carRegistrationNumber) updateData.carRegistrationNumber = carRegistrationNumber;
     if (carPicture) updateData.carPicture = carPicture;

@@ -1,187 +1,319 @@
-const User = require('../models/User');
-const Passenger = require('../models/Passenger');
-const Driver = require('../models/Driver');
-const { generateToken, validateEmail, validatePhoneNumber } = require('../utils/helpers');
+const { dbHelpers, collections } = require('../utils/database');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const validator = require('validator');
 
-// @desc    Register user (Passenger or Driver)
-// @route   POST /api/auth/register
-// @access  Public
+// Helper function to generate JWT token
+const generateToken = (userId) => {
+  return jwt.sign({ uid: userId }, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRE || '7d',
+  });
+};
+
+// Register user
 exports.register = async (req, res) => {
   try {
-    const { username, password, firstName, lastName, phoneNumber, accountType, ...otherData } = req.body;
-    
-    // Validate input
-    if (!username || !password || !firstName || !lastName || !phoneNumber || !accountType) {
-      return res.status(400).json({ message: 'Please provide all required fields' });
+    const {
+      firstName,
+      lastName,
+      email,
+      phoneNumber,
+      password,
+      confirmPassword,
+      accountType,
+      carModel,
+      carColor,
+      carRegistration,
+      licenseNumber,
+    } = req.body;
+
+    // Validation
+    if (!firstName || !lastName || !email || !phoneNumber || !password || !accountType) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide all required fields',
+      });
     }
-    
-    if (!validatePhoneNumber(phoneNumber)) {
-      return res.status(400).json({ message: 'Invalid phone number format' });
+
+    if (!validator.isEmail(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid email address',
+      });
     }
-    
-    if (accountType !== 'passenger' && accountType !== 'driver') {
-      return res.status(400).json({ message: 'Account type must be passenger or driver' });
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 6 characters',
+      });
     }
-    
-    // Check if user already exists
-    const existingUser = await User.findOne({ $or: [{ username }, { phoneNumber }] });
-    if (existingUser) {
-      return res.status(400).json({ message: 'Username or phone number already in use' });
+
+    if (password !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Passwords do not match',
+      });
     }
+
+    // Check if email already exists
+    const existingUsers = await dbHelpers.queryDocuments(collections.users, 'email', '==', email);
+    if (existingUsers.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email already registered',
+      });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create user document with unique ID
+    const userId = email.split('@')[0] + '-' + Date.now();
     
-    // Additional validation for driver registration
+    const userData = {
+      uid: userId,
+      firstName,
+      lastName,
+      email,
+      phoneNumber,
+      accountType,
+      password: hashedPassword,
+      profilePicture: null,
+      rating: 0,
+      totalRatings: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    // Create user in users collection
+    await dbHelpers.createDocument(collections.users, userId, userData);
+
+    // Create role-specific document
     if (accountType === 'driver') {
-      const { carModel, carColor, carRegistrationNumber } = otherData;
-      if (!carModel || !carColor || !carRegistrationNumber) {
-        return res.status(400).json({ message: 'Driver must provide vehicle details' });
-      }
-      
-      // Create driver account
-      const driver = new Driver({
-        username,
-        password,
+      const driverData = {
+        uid: userId,
         firstName,
         lastName,
+        email,
         phoneNumber,
-        accountType: 'driver',
-        carModel,
-        carColor,
-        carRegistrationNumber
-      });
-      
-      await driver.save();
-      
-      const token = generateToken(driver._id, 'driver');
-      return res.status(201).json({
-        message: 'Driver registered successfully',
-        token,
-        user: {
-          id: driver._id,
-          username: driver.username,
-          firstName: driver.firstName,
-          lastName: driver.lastName,
-          accountType: driver.accountType
-        }
-      });
-    } else {
-      // Create passenger account
-      const passenger = new Passenger({
-        username,
-        password,
+        carModel: carModel || '',
+        carColor: carColor || '',
+        carRegistration: carRegistration || '',
+        licenseNumber: licenseNumber || '',
+        isActive: false,
+        bankAccountNumber: '',
+        bankAccountName: '',
+        bankName: '',
+        carPicture: null,
+        walletBalance: 0,
+        completedRides: 0,
+        rating: 0,
+        totalRatings: 0,
+        currentLocation: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      await dbHelpers.createDocument(collections.drivers, userId, driverData);
+    } else if (accountType === 'passenger') {
+      const passengerData = {
+        uid: userId,
         firstName,
         lastName,
+        email,
         phoneNumber,
-        accountType: 'passenger'
-      });
-      
-      await passenger.save();
-      
-      const token = generateToken(passenger._id, 'passenger');
-      return res.status(201).json({
-        message: 'Passenger registered successfully',
-        token,
-        user: {
-          id: passenger._id,
-          username: passenger.username,
-          firstName: passenger.firstName,
-          lastName: passenger.lastName,
-          accountType: passenger.accountType
-        }
-      });
+        cardDetails: [],
+        emergencyContact: '',
+        completedRides: 0,
+        rating: 0,
+        totalRatings: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      await dbHelpers.createDocument(collections.passengers, userId, passengerData);
     }
+
+    // Generate token
+    const token = generateToken(userId);
+
+    res.status(201).json({
+      success: true,
+      message: 'User registered successfully',
+      token,
+      user: {
+        id: userId,
+        firstName,
+        lastName,
+        email,
+        accountType,
+      },
+    });
   } catch (error) {
     console.error('Registration error:', error);
-    res.status(500).json({ message: 'Registration failed', error: error.message });
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Registration failed',
+    });
   }
 };
 
-// @desc    Login user
-// @route   POST /api/auth/login
-// @access  Public
+// Login user
 exports.login = async (req, res) => {
   try {
-    const { username, password } = req.body;
-    
-    if (!username || !password) {
-      return res.status(400).json({ message: 'Please provide username and password' });
+    const { email, password } = req.body;
+
+    // Validation
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and password are required',
+      });
     }
-    
-    const user = await User.findOne({ username }).select('+password');
-    
-    if (!user) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+
+    // Find user by email
+    const users = await dbHelpers.queryDocuments(collections.users, 'email', '==', email);
+    if (users.length === 0) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password',
+      });
     }
-    
-    const isPasswordMatch = await user.matchPassword(password);
-    
+
+    const user = users[0];
+
+    // Compare password
+    const isPasswordMatch = await bcrypt.compare(password, user.password);
     if (!isPasswordMatch) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password',
+      });
     }
-    
-    const token = generateToken(user._id, user.accountType);
-    
+
+    // Generate token
+    const token = generateToken(user.uid);
+
     res.status(200).json({
-      message: 'Login successful',
+      success: true,
+      message: 'Logged in successfully',
       token,
       user: {
-        id: user._id,
-        username: user.username,
+        id: user.uid,
         firstName: user.firstName,
         lastName: user.lastName,
-        accountType: user.accountType
-      }
+        email: user.email,
+        accountType: user.accountType,
+        rating: user.rating,
+      },
     });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ message: 'Login failed', error: error.message });
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Login failed',
+    });
   }
 };
 
-// @desc    Get current user profile
-// @route   GET /api/auth/me
-// @access  Private
-exports.getMe = async (req, res) => {
+// Get user profile
+exports.getUserProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select('-password');
-    
+    const userId = req.user.uid;
+
+    // Get user from users collection
+    const user = await dbHelpers.getDocument(collections.users, userId);
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      });
     }
-    
+
+    // Get role-specific data
+    let roleData = {};
+    if (user.accountType === 'driver') {
+      roleData = await dbHelpers.getDocument(collections.drivers, userId);
+    } else if (user.accountType === 'passenger') {
+      roleData = await dbHelpers.getDocument(collections.passengers, userId);
+    }
+
     res.status(200).json({
-      user
+      success: true,
+      user: {
+        ...user,
+        ...roleData,
+      },
     });
   } catch (error) {
     console.error('Get profile error:', error);
-    res.status(500).json({ message: 'Failed to retrieve profile', error: error.message });
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get profile',
+    });
   }
 };
 
-// @desc    Verify phone number
-// @route   POST /api/auth/verify-phone
-// @access  Private
-exports.verifyPhone = async (req, res) => {
+// Verify phone number
+exports.verifyPhoneNumber = async (req, res) => {
   try {
-    const { verificationCode } = req.body;
-    
-    // In production, verify the OTP from Twilio
-    // For now, we'll accept any 6-digit code
-    if (!verificationCode || verificationCode.length !== 6) {
-      return res.status(400).json({ message: 'Invalid verification code' });
+    const { phoneNumber, code } = req.body;
+
+    // Test code verification (for development)
+    const testCode = '123456';
+    if (code !== testCode) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid verification code',
+      });
     }
-    
-    const user = await User.findByIdAndUpdate(
-      req.userId,
-      { phoneVerified: true },
-      { new: true }
-    );
-    
+
     res.status(200).json({
-      message: 'Phone verified successfully',
-      user
+      success: true,
+      message: 'Phone number verified successfully',
     });
   } catch (error) {
     console.error('Phone verification error:', error);
-    res.status(500).json({ message: 'Phone verification failed', error: error.message });
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Verification failed',
+    });
+  }
+};
+
+// Update user profile
+exports.updateProfile = async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    const updateData = req.body;
+
+    // Remove sensitive fields
+    delete updateData.password;
+    delete updateData.uid;
+    delete updateData.email;
+
+    // Update user document
+    await dbHelpers.updateDocument(collections.users, userId, updateData);
+
+    // If driver, update driver collection too
+    if (req.user.accountType === 'driver') {
+      await dbHelpers.updateDocument(collections.drivers, userId, updateData);
+    } else if (req.user.accountType === 'passenger') {
+      await dbHelpers.updateDocument(collections.passengers, userId, updateData);
+    }
+
+    // Get updated user
+    const updatedUser = await dbHelpers.getDocument(collections.users, userId);
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile updated successfully',
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to update profile',
+    });
   }
 };

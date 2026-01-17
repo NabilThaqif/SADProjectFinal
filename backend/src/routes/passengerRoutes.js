@@ -1,16 +1,16 @@
 const express = require('express');
-const { authMiddleware, isPassenger } = require('../middleware/auth');
-const { updateProfile, searchRide, bookRide, getRideHistory, rateDriver } = require('../controllers/passengerController');
+const { authenticateToken, isPassenger } = require('../middleware/auth');
 
 const router = express.Router();
 
-router.use(authMiddleware);
+router.use(authenticateToken);
 router.use(isPassenger);
 
-router.put('/profile', updateProfile);
-router.post('/search-ride', searchRide);
-router.post('/book-ride', bookRide);
-router.get('/ride-history', getRideHistory);
-router.post('/rate-driver/:rideId', rateDriver);
+// TODO: Add passenger routes
+router.get('/profile', (req, res) => {
+  res.json({ message: 'Passenger profile' });
+});
+
+module.exports = router;
 
 module.exports = router;

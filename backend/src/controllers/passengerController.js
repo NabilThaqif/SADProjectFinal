@@ -1,23 +1,51 @@
-const Passenger = require('../models/Passenger');
-const Ride = require('../models/Ride');
-const Rating = require('../models/Rating');
-const Payment = require('../models/Payment');
-const Driver = require('../models/Driver');
-const { calculateFare } = require('../utils/helpers');
+const { dbHelpers, collections } = require('../utils/database');
 
-// @desc    Update passenger profile
-// @route   PUT /api/passengers/:id
-// @access  Private
+// Calculate fare based on distance (RM per km)
+const calculateFare = (distance) => {
+  const basefare = 3.0;
+  const pricePerKm = 1.5;
+  return basefare + distance * pricePerKm;
+};
+
+// Get passenger profile
+exports.getPassengerProfile = async (req, res) => {
+  try {
+    const { uid } = req.user;
+
+    const passenger = await dbHelpers.getDocument(collections.passengers, uid);
+    if (!passenger) {
+      return res.status(404).json({
+        success: false,
+        message: 'Passenger profile not found',
+      });
+    }
+
+    res.json({
+      success: true,
+      passenger,
+    });
+  } catch (error) {
+    console.error('Error getting passenger profile:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Update passenger profile
 exports.updateProfile = async (req, res) => {
   try {
-    const { firstName, lastName, phoneNumber, email, profilePicture, debitCreditCard } = req.body;
-    
-    const updateData = {};
-    if (firstName) updateData.firstName = firstName;
-    if (lastName) updateData.lastName = lastName;
-    if (phoneNumber) updateData.phoneNumber = phoneNumber;
-    if (email) updateData.email = email;
-    if (profilePicture) updateData.profilePicture = profilePicture;
+    const { uid } = req.user;
+    const {
+      firstName,
+      lastName,
+      phoneNumber,
+      email,
+      profilePicture,
+      cardDetails,
+      emergencyContact,
+    } = req.body;
     if (debitCreditCard) updateData.debitCreditCard = debitCreditCard;
     
     const passenger = await Passenger.findByIdAndUpdate(
