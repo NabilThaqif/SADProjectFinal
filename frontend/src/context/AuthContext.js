@@ -12,11 +12,11 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const login = useCallback(async (username, password) => {
+  const login = useCallback(async (email, password) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await authService.login({ username, password });
+      const response = await authService.login({ email, password });
       const { token, user: userData } = response.data;
       
       localStorage.setItem('token', token);
