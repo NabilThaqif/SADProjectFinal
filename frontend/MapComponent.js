@@ -11,7 +11,7 @@ const MapComponent = ({ drivers = [], passengers = [], center = UPM_CENTER }) =>
   const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: apiKey,
+    googleMapsApiKey: AIzaSyCBY0SrvjU1tMtRjHeSC7SG4e6Mi-pWE8s,
   });
 
   const [map, setMap] = useState(null);
