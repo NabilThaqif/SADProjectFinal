@@ -8,7 +8,7 @@ export const Login = () => {
   const { login } = useAuth();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    username: '',
+    email: '',
     password: ''
   });
 
@@ -25,7 +25,7 @@ export const Login = () => {
     setLoading(true);
     
     try {
-      const user = await login(formData.username, formData.password);
+      const user = await login(formData.email, formData.password);
       toast.success('Login successful!');
       navigate(user.accountType === 'passenger' ? '/passenger/dashboard' : '/driver/dashboard');
     } catch (error) {
@@ -45,10 +45,10 @@ export const Login = () => {
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <input
-            type="text"
-            name="username"
-            placeholder="Username"
-            value={formData.username}
+            type="email"
+            name="email"
+            placeholder="Email"
+            value={formData.email}
             onChange={handleChange}
             required
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
