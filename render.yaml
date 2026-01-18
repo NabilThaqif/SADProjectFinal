@@ -2,10 +2,11 @@ services:
   - type: web
     name: upm-student-cab-backend
     env: node
-    rootDirectory: backend
+    repo: https://github.com/NabilThaqif/SADProjectFinal.git
+    branch: main
+    rootDir: backend
     buildCommand: npm ci || npm install
     startCommand: npm start
-    autoDeploy: true
     
     # Optional: set a health check if you have one (e.g., GET /health)
     # healthCheckPath: /health
