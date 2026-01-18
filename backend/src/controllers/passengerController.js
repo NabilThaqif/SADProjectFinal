@@ -245,4 +245,50 @@ function calculateDistance(coords1, coords2) {
   return R * c;
 }
 
+// Calculate fare using Google Distance Matrix API
+exports.calculateFareWithDistance = async (req, res) => {
+  try {
+    const { pickupLat, pickupLng, dropoffLat, dropoffLng } = req.body;
+
+    if (!pickupLat || !pickupLng || !dropoffLat || !dropoffLng) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing coordinates',
+      });
+    }
+
+    const distanceMatrixUrl = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${pickupLat},${pickupLng}&destinations=${dropoffLat},${dropoffLng}&key=${process.env.GOOGLE_DISTANCE_MATRIX_API_KEY}`;
+
+    const response = await fetch(distanceMatrixUrl);
+    const data = await response.json();
+
+    if (data.status === 'OK' && data.rows && data.rows[0] && data.rows[0].elements && data.rows[0].elements[0].status === 'OK') {
+      const distanceInMeters = data.rows[0].elements[0].distance.value;
+      const distanceInKm = distanceInMeters / 1000;
+      const durationInSeconds = data.rows[0].elements[0].duration.value;
+
+      // Fare calculation: RM 1 per kilometer (no base fare)
+      const fare = (distanceInKm * 1.0).toFixed(2);
+
+      res.json({
+        success: true,
+        fare: parseFloat(fare),
+        distance: parseFloat(distanceInKm.toFixed(1)),
+        duration: Math.ceil(durationInSeconds / 60), // in minutes
+      });
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: `Distance Matrix API error: ${data.status}`,
+      });
+    }
+  } catch (error) {
+    console.error('Error calculating fare:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 module.exports = exports;

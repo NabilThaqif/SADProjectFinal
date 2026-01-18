@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   FiMap,
   FiDollarSign,
@@ -12,51 +12,150 @@ import {
 } from 'react-icons/fi';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import MapComponent from '../components/MapComponent';
+
+// Real locations to randomize pickup/dropoff data for offers and active rides
+const REAL_LOCATIONS = [
+  { name: 'KLIA Terminal 1', lat: 2.7450, lng: 101.7097 },
+  { name: 'KL Sentral', lat: 3.1340, lng: 101.6869 },
+  { name: 'Mid Valley Megamall', lat: 3.1179, lng: 101.6779 },
+  { name: 'Pavilion Kuala Lumpur', lat: 3.1499, lng: 101.7146 },
+  { name: 'One Utama', lat: 3.1477, lng: 101.6146 },
+  { name: 'Kota Damansara', lat: 3.1728, lng: 101.5872 },
+  { name: 'Sunway Pyramid', lat: 3.0738, lng: 101.6070 },
+  { name: 'IOI City Mall Putrajaya', lat: 2.9685, lng: 101.7077 },
+  { name: 'Cyberjaya', lat: 2.9258, lng: 101.6158 },
+  { name: 'Fakulti Sains Komputer UPM', lat: 3.0041, lng: 101.6901 },
+];
+
+const randomInt = (max) => Math.floor(Math.random() * max);
+
+const haversineKm = (a, b) => {
+  const R = 6371;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const lat1 = (a.lat * Math.PI) / 180;
+  const lat2 = (b.lat * Math.PI) / 180;
+  const sinLat = Math.sin(dLat / 2);
+  const sinLng = Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(
+    Math.sqrt(sinLat * sinLat + Math.cos(lat1) * Math.cos(lat2) * sinLng * sinLng),
+    Math.sqrt(1 - (sinLat * sinLat + Math.cos(lat1) * Math.cos(lat2) * sinLng * sinLng))
+  );
+  return R * c;
+};
+
+const buildRandomOffer = (id) => {
+  let fromIdx = randomInt(REAL_LOCATIONS.length);
+  let toIdx = randomInt(REAL_LOCATIONS.length);
+  while (toIdx === fromIdx) toIdx = randomInt(REAL_LOCATIONS.length);
+
+  const pickup = REAL_LOCATIONS[fromIdx];
+  const dropoff = REAL_LOCATIONS[toIdx];
+  const distanceKm = Math.max(1, haversineKm(pickup, dropoff));
+  const fare = distanceKm * 1.0; // RM1 per km
+  const etaMins = Math.round(distanceKm * 2 + 8);
+
+  const passengerNames = ['Nur Azahra', 'Ahmad Hassan', 'Lim Wei Jun', 'Aisyah Rahman'];
+  const rating = (4.2 + Math.random() * 0.8).toFixed(1);
+  const totalRatings = Math.floor(12 + Math.random() * 30);
+  const name = passengerNames[randomInt(passengerNames.length)];
+
+  return {
+    id,
+    passenger: { name, rating: Number(rating), totalRatings },
+    pickup: pickup.name,
+    dropoff: dropoff.name,
+    fare: Number(fare.toFixed(2)),
+    distance: `${distanceKm.toFixed(1)} km`,
+    time: `${etaMins} mins`,
+    pickupLocation: { lat: pickup.lat, lng: pickup.lng },
+    dropoffLocation: { lat: dropoff.lat, lng: dropoff.lng },
+  };
+};
 
 const DriverDashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isActive, setIsActive] = useState(true);
-  const [rideOffers, setRideOffers] = useState([
-    {
-      id: 'offer1',
-      passenger: { name: 'Nur Azahra', rating: 4.8 },
-      pickup: 'Sungai Long LRT Station',
-      dropoff: 'Mid Valley Megamall',
-      fare: 12.0,
-      distance: '8.5 km',
-      time: '12 mins',
-    },
-    {
-      id: 'offer2',
-      passenger: { name: 'Ahmad Hassan', rating: 4.5 },
-      pickup: 'One Utama',
-      dropoff: 'Kota Damansara',
-      fare: 15.5,
-      distance: '10 km',
-      time: '15 mins',
-    },
+  const [rideOffers, setRideOffers] = useState(() => [
+    buildRandomOffer('offer1'),
+    buildRandomOffer('offer2'),
+    buildRandomOffer('offer3'),
   ]);
   const [currentRide, setCurrentRide] = useState(null);
-  const [rideHistory, setRideHistory] = useState([
-    {
-      id: 'ride1',
-      passenger: 'Ahmad Hassan',
-      from: 'UPM Main Gate',
-      to: 'Pavilion KL',
-      fare: 18.5,
-      date: '2024-01-15',
-      paymentMethod: 'card',
-    },
-    {
-      id: 'ride2',
-      passenger: 'Nur Azahra',
-      from: 'Sungai Long LRT',
-      to: 'Mid Valley',
-      fare: 12.0,
-      date: '2024-01-10',
-      paymentMethod: 'cash',
-    },
-  ]);
+  const [driverCurrentLocation] = useState({ lat: 3.1219, lng: 101.6869 }); // Mock driver location (UPM area)
+  const [driverPickupCoords, setDriverPickupCoords] = useState(null);
+  const [driverDropoffCoords, setDriverDropoffCoords] = useState(null);
+  const [routeInfo, setRouteInfo] = useState(null);
+  const [rideHistory, setRideHistory] = useState([]);
+
+  // Resolve pickup/dropoff coordinates when a ride becomes active
+  useEffect(() => {
+    if (!currentRide) {
+      setDriverPickupCoords(null);
+      setDriverDropoffCoords(null);
+      return;
+    }
+
+    let isMounted = true;
+
+    const resolveCoords = async (location) => {
+      console.log('Resolving location:', location);
+      
+      // Already lat/lng object
+      if (location && typeof location === 'object' && 'lat' in location && 'lng' in location) {
+        console.log('Location is already lat/lng:', location);
+        return location;
+      }
+
+      // If location is a string, try geocoding via Google Maps JS API
+      if (typeof location === 'string' && window.google && window.google.maps) {
+        console.log('Geocoding string location:', location);
+        const geocoder = new window.google.maps.Geocoder();
+        return new Promise((resolve) => {
+          geocoder.geocode({ address: location }, (results, status) => {
+            if (status === 'OK' && results[0]) {
+              const loc = results[0].geometry.location;
+              const resolved = { lat: loc.lat(), lng: loc.lng() };
+              console.log('Geocoded location:', resolved);
+              resolve(resolved);
+            } else {
+              // Fallback: UPM center
+              console.log('Geocoding failed, using fallback');
+              resolve({ lat: 3.1219, lng: 101.6869 });
+            }
+          });
+        });
+      }
+
+      // Fallback: UPM center
+      console.log('Using fallback UPM center');
+      return { lat: 3.1219, lng: 101.6869 };
+    };
+
+    (async () => {
+      const pickupLoc = currentRide.pickupLocation || currentRide.pickup;
+      const dropoffLoc = currentRide.dropoffLocation || currentRide.dropoff;
+      
+      console.log('Resolving ride coordinates:', { pickupLoc, dropoffLoc });
+      
+      const [pickupResolved, dropoffResolved] = await Promise.all([
+        resolveCoords(pickupLoc),
+        resolveCoords(dropoffLoc),
+      ]);
+
+      console.log('Resolved coordinates:', { pickupResolved, dropoffResolved });
+
+      if (isMounted) {
+        setDriverPickupCoords(pickupResolved);
+        setDriverDropoffCoords(dropoffResolved);
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentRide]);
 
   const toggleDriverStatus = () => {
     setIsActive(!isActive);
@@ -66,15 +165,18 @@ const DriverDashboard = () => {
   };
 
   const acceptRide = (offer) => {
+    console.log('Accepting ride offer:', offer);
     setCurrentRide({
       ...offer,
       status: 'accepted',
       pickupStatus: null,
+      paymentMethod: 'card', // Set default payment method when ride is accepted
       passenger: {
         ...offer.passenger,
         profilePicture: '👩',
       },
     });
+    setRouteInfo(null);
     setRideOffers(rideOffers.filter((r) => r.id !== offer.id));
     setActiveTab('active-ride');
     toast.success('Ride accepted!');
@@ -95,17 +197,36 @@ const DriverDashboard = () => {
   };
 
   const failedPickup = () => {
-    setCurrentRide({
-      ...currentRide,
-      pickupStatus: 'failed',
-      status: 'cancelled',
-    });
-    toast.error('Pickup marked as failed. Ride cancelled.');
+    setCurrentRide(null);
+    setActiveTab('dashboard');
+    toast.error('Pickup failed. Ride cancelled.');
   };
 
   const completeRide = () => {
     toast.success('Ride completed! Please confirm payment.');
     setActiveTab('complete-ride');
+  };
+
+  const completeTransaction = () => {
+    // Add completed ride to history
+    if (currentRide) {
+      setRideHistory([
+        {
+          id: 'ride' + Date.now(),
+          passenger: currentRide.passenger.name,
+          from: currentRide.pickup,
+          to: currentRide.dropoff,
+          fare: currentRide.fare,
+          date: new Date().toISOString().split('T')[0],
+          paymentMethod: currentRide.paymentMethod,
+        },
+        ...rideHistory,
+      ]);
+    }
+    // Reset current ride and redirect to dashboard
+    setCurrentRide(null);
+    setActiveTab('dashboard');
+    toast.success('Transaction completed! Ready for next ride.');
   };
 
   return (
@@ -263,7 +384,7 @@ const DriverDashboard = () => {
                     </h3>
                     <p className="text-gray-600 flex items-center gap-1">
                       <FiStar className="text-yellow-400" /> {currentRide.passenger.rating} (
-                      {Math.floor(Math.random() * 20 + 5)} ratings)
+                      {currentRide.passenger.totalRatings || 15} ratings)
                     </p>
                   </div>
                 </div>
@@ -290,6 +411,37 @@ const DriverDashboard = () => {
                   </div>
                 </div>
               )}
+
+              {/* Live Map with Route */}
+              <div className="bg-white rounded-lg shadow p-6">
+                <h2 className="text-lg font-bold text-gray-800 mb-4">Live Route</h2>
+                {driverPickupCoords && driverDropoffCoords ? (
+                  <MapComponent
+                    driverLocation={driverCurrentLocation}
+                    pickupLocation={driverPickupCoords}
+                    destinationLocation={driverDropoffCoords}
+                    showRoute={true}
+                    center={driverPickupCoords}
+                    onRouteCalculated={(info) => setRouteInfo(info)}
+                  />
+                ) : (
+                  <p className="text-sm text-gray-500">Loading route…</p>
+                )}
+                {routeInfo && (
+                  <div className="mt-4 grid grid-cols-2 gap-4">
+                    <div className="bg-blue-50 p-3 rounded">
+                      <p className="text-xs text-gray-600">To Pickup</p>
+                      <p className="font-semibold text-blue-600">{routeInfo.toPickup.duration}</p>
+                      <p className="text-xs text-gray-500">{routeInfo.toPickup.distance}</p>
+                    </div>
+                    <div className="bg-green-50 p-3 rounded">
+                      <p className="text-xs text-gray-600">To Destination</p>
+                      <p className="font-semibold text-green-600">{routeInfo.toDestination.duration}</p>
+                      <p className="text-xs text-gray-500">{routeInfo.toDestination.distance}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Active Ride Info */}
               {currentRide.pickupStatus === 'successful' && (
@@ -383,18 +535,49 @@ const DriverDashboard = () => {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
               <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-2xl font-bold text-gray-800 mb-6">Complete Ride & Payment</h2>
+                <h2 className="text-2xl font-bold text-gray-800 mb-6">Complete Ride</h2>
                 <div className="space-y-4">
-                  <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-                    <h3 className="font-semibold text-gray-800 mb-3">Payment Method</h3>
-                    <label className="flex items-center gap-3 mb-3 cursor-pointer">
-                      <input type="radio" name="payment" defaultChecked className="w-4 h-4" />
-                      <span className="text-gray-700">Cash Payment</span>
-                    </label>
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <input type="radio" name="payment" className="w-4 h-4" />
-                      <span className="text-gray-700">Card Payment (Auto Transfer)</span>
-                    </label>
+                  {/* Payment Received Notice */}
+                  <div className="bg-blue-50 rounded-lg p-6 border-l-4 border-blue-500">
+                    <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                      <FiDollarSign className="text-blue-600" size={24} />
+                      Payment Received
+                    </h3>
+                    <div className="bg-white rounded-lg p-4 border border-blue-200">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          {currentRide?.paymentMethod === 'card' ? (
+                            <>
+                              <div className="bg-green-100 p-2 rounded-full">
+                                <FiCheck className="text-green-600" size={20} />
+                              </div>
+                              <div>
+                                <p className="font-semibold text-gray-800">Card Payment</p>
+                                <p className="text-sm text-gray-600">Payment processed automatically</p>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="bg-green-100 p-2 rounded-full">
+                                <FiDollarSign className="text-green-600" size={20} />
+                              </div>
+                              <div>
+                                <p className="font-semibold text-gray-800">Cash Payment</p>
+                                <p className="text-sm text-gray-600">Received from passenger</p>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-2xl font-bold text-green-600">
+                            RM {currentRide?.fare || '18.50'}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {currentRide?.paymentMethod === 'card' ? 'Auto-transferred' : 'Cash collected'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="border-t pt-6">
@@ -402,32 +585,30 @@ const DriverDashboard = () => {
                     <div className="space-y-2">
                       <div className="flex justify-between text-gray-700">
                         <span>Passenger</span>
-                        <span>Ahmad Hassan</span>
+                        <span>{currentRide?.passenger?.name || 'Ahmad Hassan'}</span>
                       </div>
                       <div className="flex justify-between text-gray-700">
                         <span>Route</span>
-                        <span>UPM → Pavilion KL</span>
+                        <span>{currentRide?.pickup || 'UPM'} → {currentRide?.dropoff || 'Pavilion KL'}</span>
                       </div>
                       <div className="flex justify-between text-gray-700">
                         <span>Distance</span>
-                        <span>10 km</span>
+                        <span>{currentRide?.distance || '10 km'}</span>
                       </div>
                       <div className="border-t pt-2 flex justify-between text-lg font-bold text-green-600">
                         <span>Total Fare</span>
-                        <span>RM 18.50</span>
+                        <span>RM {currentRide?.fare || '18.50'}</span>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 mt-6">
-                  <button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition">
-                    Request Rating
-                  </button>
-                  <button className="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg transition">
-                    Complete Transaction
-                  </button>
-                </div>
+                <button
+                  onClick={completeTransaction}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg transition mt-6"
+                >
+                  Complete Transaction
+                </button>
               </div>
             </div>
 

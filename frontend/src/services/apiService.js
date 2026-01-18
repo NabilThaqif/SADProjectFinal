@@ -39,3 +39,12 @@ export const notificationService = {
   getNotifications: () => api.get('/notifications'),
   markAsRead: (notificationId) => api.put(`/notifications/${notificationId}/read`)
 };
+
+export const paymentService = {
+  createIntent: (data) => api.post('/payments/create-intent', data),
+  confirmPayment: (data) => api.post('/payments/confirm', data),
+  createTestPayment: (data) => api.post('/payments/test-payment', data),
+  getPaymentHistory: () => api.get('/payments/history')
+};
+
+export default api;

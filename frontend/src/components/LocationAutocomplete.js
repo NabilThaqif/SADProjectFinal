@@ -1,0 +1,166 @@
+import React, { useState, useEffect, useRef } from 'react';
+
+const LocationAutocomplete = ({ value, onChange, placeholder }) => {
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeSuggestion, setActiveSuggestion] = useState(-1);
+  const autocompleteServiceRef = useRef(null);
+  const sessionTokenRef = useRef(null);
+
+  // Initialize Places Autocomplete Service and Session Token
+  useEffect(() => {
+    if (window.google && window.google.maps && window.google.maps.places) {
+      autocompleteServiceRef.current = new window.google.maps.places.AutocompleteService();
+      sessionTokenRef.current = new window.google.maps.places.AutocompleteSessionToken();
+    }
+  }, []);
+
+  const handleInputChange = async (e) => {
+    const inputValue = e.target.value;
+    onChange(inputValue);
+
+    if (inputValue.length < 3) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    try {
+      if (autocompleteServiceRef.current) {
+        const predictions = await autocompleteServiceRef.current.getPlacePredictions({
+          input: inputValue,
+          sessionToken: sessionTokenRef.current,
+          componentRestrictions: { country: 'my' }, // Restrict to Malaysia
+          bounds: {
+            north: 6.5,
+            south: 1,
+            east: 104,
+            west: 100,
+          },
+        });
+
+        setSuggestions(predictions.predictions || []);
+        setShowSuggestions(true);
+        setActiveSuggestion(-1);
+      }
+    } catch (error) {
+      console.error('Error fetching autocomplete predictions:', error);
+      setSuggestions([]);
+    }
+  };
+
+  const handleSuggestionClick = (suggestion) => {
+    onChange(suggestion.description);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    
+    // Generate new session token for next search
+    sessionTokenRef.current = new window.google.maps.places.AutocompleteSessionToken();
+  };
+
+  const handleKeyDown = (e) => {
+    if (!showSuggestions) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setActiveSuggestion((prev) =>
+          prev < suggestions.length - 1 ? prev + 1 : prev
+        );
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setActiveSuggestion((prev) => (prev > 0 ? prev - 1 : -1));
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (activeSuggestion >= 0) {
+          handleSuggestionClick(suggestions[activeSuggestion]);
+        }
+        break;
+      case 'Escape':
+        setShowSuggestions(false);
+        break;
+      default:
+        break;
+    }
+  };
+
+  return (
+    <div className="relative w-full" style={{ overflow: 'visible' }}>
+      <input
+        type="text"
+        value={value}
+        onChange={handleInputChange}
+        onKeyDown={handleKeyDown}
+        onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+        placeholder={placeholder}
+        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+
+      {showSuggestions && suggestions.length > 0 && (
+        <div 
+          className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-y-auto" 
+          style={{ 
+            zIndex: 9999,
+            backgroundColor: '#ffffff',
+            overflow: 'visible', 
+            overflowY: 'auto',
+            position: 'absolute'
+          }}
+        >
+          {suggestions.map((suggestion, index) => {
+            const mainText = suggestion.structured_formatting?.main_text || suggestion.description || 'Unknown';
+            const secondaryText = suggestion.structured_formatting?.secondary_text || '';
+            
+            return (
+              <div
+                key={suggestion.place_id}
+                onClick={() => handleSuggestionClick(suggestion)}
+                style={{
+                  padding: '12px 16px',
+                  cursor: 'pointer',
+                  backgroundColor: index === activeSuggestion ? '#3b82f6' : '#ffffff',
+                  borderBottom: '1px solid #e5e7eb'
+                }}
+                onMouseEnter={(e) => {
+                  if (index !== activeSuggestion) {
+                    e.currentTarget.style.backgroundColor = '#f3f4f6';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (index !== activeSuggestion) {
+                    e.currentTarget.style.backgroundColor = '#ffffff';
+                  }
+                }}
+              >
+                <div 
+                  style={{ 
+                    fontWeight: '600', 
+                    fontSize: '14px',
+                    color: index === activeSuggestion ? '#ffffff !important' : '#111827 !important',
+                    lineHeight: '1.4'
+                  }}
+                >
+                  {mainText}
+                </div>
+                <div 
+                  style={{ 
+                    fontSize: '12px',
+                    color: index === activeSuggestion ? '#bfdbfe !important' : '#6b7280 !important',
+                    lineHeight: '1.4',
+                    marginTop: '2px'
+                  }}
+                >
+                  {secondaryText}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default LocationAutocomplete;

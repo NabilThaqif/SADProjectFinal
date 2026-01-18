@@ -445,4 +445,15 @@ async function seedDatabase() {
   }
 }
 
+// Execute seeding if this file is run directly
+if (require.main === module) {
+  seedDatabase().then(() => {
+    console.log('Seeding finished');
+    process.exit(0);
+  }).catch((error) => {
+    console.error('Seeding failed:', error);
+    process.exit(1);
+  });
+}
+
 module.exports = { seedDatabase, dummyData };

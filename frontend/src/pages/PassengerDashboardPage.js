@@ -1,15 +1,50 @@
 import React, { useState } from 'react';
-import { FiMap, FiDollarSign, FiCheck, FiX, FiMessageCircle, FiStar } from 'react-icons/fi';
+import { FiMap, FiCheck, FiMessageCircle, FiStar } from 'react-icons/fi';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import MapComponent from '../components/MapComponent';
+import LocationAutocomplete from '../components/LocationAutocomplete';
+import { Elements } from '@stripe/react-stripe-js';
+import { loadStripe } from '@stripe/stripe-js';
+import PaymentForm from '../components/PaymentForm';
+
+// Initialize Stripe
+const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY);
+
+// Location coordinates mapping for UPM area
+const LOCATION_COORDINATES = {
+  'UPM Main Gate': { lat: 3.1245, lng: 101.6878 },
+  'Pavilion KL': { lat: 3.1575, lng: 101.6804 },
+  'Sungai Long LRT Station': { lat: 3.0428, lng: 101.8043 },
+  'Mid Valley Megamall': { lat: 3.1179, lng: 101.6779 },
+  'One Utama': { lat: 3.1477, lng: 101.6146 },
+  'Kota Damansara': { lat: 3.1728, lng: 101.5872 },
+  'UPM Library': { lat: 3.1235, lng: 101.6850 },
+  'UPM Sports Complex': { lat: 3.1180, lng: 101.6920 },
+  'Cyberjaya': { lat: 2.9258, lng: 101.6158 },
+  'Setiawangsa': { lat: 3.1667, lng: 101.6833 },
+  'Fakulti Sains Komputer dan Teknologi Maklumat': { lat: 3.0041, lng: 101.6901 },
+  'KLIA Terminal 1': { lat: 2.7450, lng: 101.7097 },
+};
+
+const getCoordinates = (locationName) => {
+  return LOCATION_COORDINATES[locationName] || { lat: 3.1219, lng: 101.6869 }; // Default to UPM center
+};
 
 const PassengerDashboard = () => {
   const [activeTab, setActiveTab] = useState('search');
-  const [pickupLocation, setPickupLocation] = useState('UPM Main Gate');
-  const [dropoffLocation, setDropoffLocation] = useState('Pavilion KL');
+  const [pickupLocation, setPickupLocation] = useState('');
+  const [dropoffLocation, setDropoffLocation] = useState('');
   const [estimatedFare, setEstimatedFare] = useState(null);
+  const [pickupCoords, setPickupCoords] = useState(null);
+  const [dropoffCoords, setDropoffCoords] = useState(null);
   const [currentRide, setCurrentRide] = useState(null);
-  const [rideHistory, setRideHistory] = useState([
+  const [showPayment, setShowPayment] = useState(false);
+  const [routeInfo, setRouteInfo] = useState(null);
+  const [rideCompleted, setRideCompleted] = useState(false);
+  const [driverRating, setDriverRating] = useState(0);
+  const [showRatingPrompt, setShowRatingPrompt] = useState(false);
+  const rideHistory = [
     {
       id: 'ride1',
       date: '2024-01-15',
@@ -28,14 +63,82 @@ const PassengerDashboard = () => {
       fare: 12.0,
       status: 'completed',
     },
-  ]);
+  ];
 
-  const calculateFare = () => {
-    // Simple fare calculation: RM 3.00 base + RM 1.50 per km (assuming ~10km for demo)
-    const distance = 10;
-    const fare = 3.0 + distance * 1.5;
-    setEstimatedFare(fare.toFixed(2));
-    toast.info(`Estimated fare: RM ${fare.toFixed(2)}`);
+  const calculateFare = async () => {
+    if (!pickupLocation || !dropoffLocation) {
+      toast.warning('Please enter both pickup and dropoff locations');
+      return;
+    }
+
+    try {
+      // Use Google Geocoding API to get coordinates from location names
+      const geocodeLocation = async (locationName) => {
+        // First try to match with predefined coordinates
+        if (LOCATION_COORDINATES[locationName]) {
+          return LOCATION_COORDINATES[locationName];
+        }
+
+        // Otherwise use Google Geocoding API
+        const geocoder = new window.google.maps.Geocoder();
+        return new Promise((resolve, reject) => {
+          geocoder.geocode({ address: locationName }, (results, status) => {
+            if (status === 'OK' && results[0]) {
+              const location = results[0].geometry.location;
+              resolve({ lat: location.lat(), lng: location.lng() });
+            } else {
+              reject(new Error('Location not found'));
+            }
+          });
+        });
+      };
+
+      // Get coordinates for both locations
+      const pickup = await geocodeLocation(pickupLocation);
+      const dropoff = await geocodeLocation(dropoffLocation);
+      
+      // Store coordinates for later use in booking
+      setPickupCoords(pickup);
+      setDropoffCoords(dropoff);
+
+      // Use Google Distance Matrix (client-side) for road distance
+      if (!window.google || !window.google.maps) {
+        throw new Error('Google Maps not loaded');
+      }
+
+      const distanceService = new window.google.maps.DistanceMatrixService();
+
+      const element = await new Promise((resolve, reject) => {
+        distanceService.getDistanceMatrix(
+          {
+            origins: [{ lat: pickup.lat, lng: pickup.lng }],
+            destinations: [{ lat: dropoff.lat, lng: dropoff.lng }],
+            travelMode: window.google.maps.TravelMode.DRIVING,
+            unitSystem: window.google.maps.UnitSystem.METRIC,
+          },
+          (response, status) => {
+            const el = response?.rows?.[0]?.elements?.[0];
+            if (status === 'OK' && el?.status === 'OK') {
+              resolve(el);
+            } else {
+              reject(new Error(`Distance Matrix error: ${status}`));
+            }
+          }
+        );
+      });
+
+      const distanceInMeters = element.distance.value;
+      const distanceInKm = distanceInMeters / 1000;
+
+      // Fare calculation: RM 1 per kilometer (no base fare)
+      const fare = distanceInKm * 1.0;
+
+      setEstimatedFare(fare.toFixed(2));
+      toast.info(`Estimated fare: RM ${fare.toFixed(2)} (${distanceInKm.toFixed(1)} km)`);
+    } catch (error) {
+      console.error('Error calculating fare:', error);
+      toast.error('Failed to calculate fare. Please check your locations.');
+    }
   };
 
   const bookRide = () => {
@@ -43,23 +146,66 @@ const PassengerDashboard = () => {
       toast.warning('Please search for a ride first');
       return;
     }
+    if (!pickupCoords || !dropoffCoords) {
+      toast.warning('Location coordinates not found. Please search again.');
+      return;
+    }
+
     setCurrentRide({
       id: 'ride' + Date.now(),
       from: pickupLocation,
       to: dropoffLocation,
       fare: estimatedFare,
       driver: { name: 'Mohammad Ali', car: 'Toyota Vios', plate: 'WXY1234' },
-      status: 'accepted',
-      driverLocation: { lat: 3.1219, lng: 101.6869 },
+      status: 'pending_payment',
+      driverLocation: { lat: 3.0025, lng: 101.7092 }, // Driver at Fakulti Sains Komputer
+      pickupLocation: pickupCoords, // Use geocoded coordinates
+      dropoffLocation: dropoffCoords, // Use geocoded coordinates
     });
+    setRouteInfo(null);
+    setShowPayment(true);
     setActiveTab('booking');
-    toast.success('Ride booked successfully!');
+  };
+
+  const handlePaymentSuccess = (payment) => {
+    setShowPayment(false);
+    setCurrentRide({
+      ...currentRide,
+      status: 'accepted',
+      paymentId: payment.id,
+    });
+    toast.success('Payment successful! Driver will pick you up soon.');
+  };
+
+  const handlePaymentCancel = () => {
+    setShowPayment(false);
+    toast.info('Payment cancelled. You can try again later.');
   };
 
   const cancelRide = () => {
     setCurrentRide(null);
     setActiveTab('search');
     toast.info('Ride cancelled');
+  };
+
+  const completeRide = () => {
+    setShowRatingPrompt(true);
+  };
+
+  const submitRating = () => {
+    if (driverRating === 0) {
+      toast.warning('Please select a rating');
+      return;
+    }
+    toast.success(`Thank you! You rated ${currentRide.driver.name} ${driverRating} star${driverRating !== 1 ? 's' : ''}`);
+    setRideCompleted(true);
+    setShowRatingPrompt(false);
+    setTimeout(() => {
+      setCurrentRide(null);
+      setRideCompleted(false);
+      setDriverRating(0);
+      setActiveTab('search');
+    }, 2000);
   };
 
   return (
@@ -110,29 +256,27 @@ const PassengerDashboard = () => {
         {activeTab === 'search' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
-              <div className="bg-white rounded-lg shadow p-6">
+              <div className="bg-white rounded-lg shadow p-6" style={{ overflow: 'visible' }}>
                 <h2 className="text-2xl font-bold text-gray-800 mb-6">Search & Book Ride</h2>
-                <div className="space-y-4">
-                  <div>
+                <div className="space-y-4" style={{ overflow: 'visible' }}>
+                  <div style={{ overflow: 'visible' }}>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
                       Pickup Location
                     </label>
-                    <input
-                      type="text"
+                    <LocationAutocomplete
                       value={pickupLocation}
-                      onChange={(e) => setPickupLocation(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onChange={setPickupLocation}
+                      placeholder="Enter pickup location..."
                     />
                   </div>
-                  <div>
+                  <div style={{ overflow: 'visible' }}>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
                       Dropoff Location
                     </label>
-                    <input
-                      type="text"
+                    <LocationAutocomplete
                       value={dropoffLocation}
-                      onChange={(e) => setDropoffLocation(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onChange={setDropoffLocation}
+                      placeholder="Enter dropoff location..."
                     />
                   </div>
                   <button
@@ -151,17 +295,18 @@ const PassengerDashboard = () => {
                 <h3 className="font-semibold mb-4">Fare Summary</h3>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center pb-3 border-b border-blue-400">
-                    <span>Distance</span>
-                    <span>~10 km</span>
+                    <span>From</span>
+                    <span className="text-right text-sm">{pickupLocation}</span>
                   </div>
                   <div className="flex justify-between items-center pb-3 border-b border-blue-400">
-                    <span>Base Fare</span>
-                    <span>RM 3.00</span>
+                    <span>To</span>
+                    <span className="text-right text-sm">{dropoffLocation}</span>
                   </div>
                   <div className="flex justify-between items-center text-lg font-bold pt-3">
-                    <span>Total</span>
+                    <span>Total Fare</span>
                     <span>RM {estimatedFare}</span>
                   </div>
+                  <p className="text-xs text-blue-100 mt-3">Rate: RM 1.00 per km (no base fare)</p>
                 </div>
                 <button
                   onClick={bookRide}
@@ -176,7 +321,20 @@ const PassengerDashboard = () => {
 
         {/* Current Ride */}
         {activeTab === 'booking' && currentRide && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <>
+            {showPayment ? (
+              <div className="max-w-2xl mx-auto">
+                <Elements stripe={stripePromise}>
+                  <PaymentForm
+                    amount={parseFloat(currentRide.fare)}
+                    rideId={currentRide.id}
+                    onSuccess={handlePaymentSuccess}
+                    onCancel={handlePaymentCancel}
+                  />
+                </Elements>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-6">
               {/* Driver Info */}
               <div className="bg-white rounded-lg shadow p-6">
@@ -204,12 +362,35 @@ const PassengerDashboard = () => {
                 </div>
               </div>
 
-              {/* Map Placeholder */}
+              {/* Live Map with Route */}
               <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-lg font-bold text-gray-800 mb-4">Live Location</h2>
-                <div className="w-full h-64 bg-gray-200 rounded-lg flex items-center justify-center">
-                  <span className="text-gray-600">Map showing driver location</span>
-                </div>
+                <h2 className="text-lg font-bold text-gray-800 mb-4">Live Route</h2>
+                {currentRide.pickupLocation && currentRide.dropoffLocation ? (
+                  <MapComponent
+                    driverLocation={currentRide.driverLocation}
+                    pickupLocation={currentRide.pickupLocation}
+                    destinationLocation={currentRide.dropoffLocation}
+                    showRoute={true}
+                    center={currentRide.driverLocation}
+                    onRouteCalculated={(info) => setRouteInfo(info)}
+                  />
+                ) : (
+                  <p className="text-sm text-gray-500">Loading route…</p>
+                )}
+                {routeInfo && (
+                  <div className="mt-4 grid grid-cols-2 gap-4">
+                    <div className="bg-blue-50 p-3 rounded">
+                      <p className="text-xs text-gray-600">Driver → Pickup</p>
+                      <p className="font-semibold text-blue-600">{routeInfo.toPickup.duration}</p>
+                      <p className="text-xs text-gray-500">{routeInfo.toPickup.distance}</p>
+                    </div>
+                    <div className="bg-green-50 p-3 rounded">
+                      <p className="text-xs text-gray-600">Pickup → Destination</p>
+                      <p className="font-semibold text-green-600">{routeInfo.toDestination.duration}</p>
+                      <p className="text-xs text-gray-500">{routeInfo.toDestination.distance}</p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Messages */}
@@ -261,14 +442,81 @@ const PassengerDashboard = () => {
                   <p className="text-3xl font-bold">RM {currentRide.fare}</p>
                 </div>
               </div>
-              <button
-                onClick={cancelRide}
-                className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-2 rounded-lg mt-6 transition"
-              >
-                Cancel Ride
-              </button>
+              {!rideCompleted ? (
+                <div className="flex gap-3 mt-6">
+                  <button
+                    onClick={completeRide}
+                    className="flex-1 bg-green-700 hover:bg-green-800 text-white font-semibold py-2 rounded-lg transition"
+                  >
+                    ✓ Ride Completed
+                  </button>
+                  <button
+                    onClick={cancelRide}
+                    className="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-2 rounded-lg transition"
+                  >
+                    Cancel Ride
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-6 p-4 bg-green-100 border-2 border-green-500 rounded-lg">
+                  <p className="text-center text-green-800 font-semibold">✓ Ride Completed</p>
+                </div>
+              )}
             </div>
           </div>
+            )}
+
+            {/* Rating Prompt Modal */}
+            {showRatingPrompt && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style={{ zIndex: 10000 }}>
+                <div className="bg-white rounded-lg shadow-lg p-8 max-w-md">
+                  <h2 className="text-2xl font-bold text-gray-800 mb-4">Rate Your Ride</h2>
+                  <p className="text-gray-600 mb-6">How was your experience with {currentRide.driver.name}?</p>
+                  
+                  {/* Star Rating */}
+                  <div className="flex justify-center gap-3 mb-8">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        onClick={() => setDriverRating(star)}
+                        className={`text-4xl transition ${
+                          star <= driverRating ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-300'
+                        }`}
+                      >
+                        ★
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Rating Display */}
+                  {driverRating > 0 && (
+                    <p className="text-center text-lg font-semibold text-gray-700 mb-6">
+                      {driverRating} star{driverRating !== 1 ? 's' : ''}
+                    </p>
+                  )}
+
+                  {/* Buttons */}
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => {
+                        setShowRatingPrompt(false);
+                        setDriverRating(0);
+                      }}
+                      className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 rounded-lg transition"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={submitRating}
+                      className="flex-1 bg-green-500 hover:bg-green-600 text-white font-semibold py-2 rounded-lg transition"
+                    >
+                      Submit Rating
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {/* Ride History */}
