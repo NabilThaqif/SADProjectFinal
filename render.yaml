@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: upm-student-cab-backend
+    env: node
+    rootDirectory: backend
+    buildCommand: npm ci || npm install
+    startCommand: npm start
+    autoDeploy: true
+    
+    # Optional: set a health check if you have one (e.g., GET /health)
+    # healthCheckPath: /health
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: FRONTEND_URL
+        value: https://localhost:3000
+      # Add secrets in Render dashboard after creating the service
+      - key: JWT_SECRET
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
+
+  # Optional: frontend as static site (uncomment if you want Render to host React)
+  # - type: static_site
+  #   name: upm-student-cab-frontend
+  #   rootDirectory: frontend
+  #   buildCommand: npm ci || npm install && npm run build
+  #   publishPath: build
+  #   envVars:
+  #     - key: REACT_APP_API_URL
+  #       value: https://<your-backend-service>.onrender.com/api
