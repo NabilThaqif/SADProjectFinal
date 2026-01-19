@@ -50,14 +50,122 @@ exports.register = async (req, res) => {
 
     // Check if email already exists
     const existingUsers = await dbHelpers.queryDocuments(collections.users, 'email', '==', email);
+    
+    // If user exists with same account type, reject
     if (existingUsers.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email already registered',
+      const existingUser = existingUsers[0];
+      
+      if (existingUser.accountType === accountType) {
+        return res.status(400).json({
+          success: false,
+          message: `Email already registered as ${accountType}`,
+        });
+      }
+      
+      // Allow same email to register for different account type
+      // Verify password matches if they want to add a driver/passenger account
+      const isPasswordMatch = await bcrypt.compare(password, existingUser.password);
+      if (!isPasswordMatch) {
+        return res.status(400).json({
+          success: false,
+          message: 'Password does not match your existing account',
+        });
+      }
+
+      // Create additional role-specific document with existing user ID
+      const userId = existingUser.uid;
+      
+      if (accountType === 'driver') {
+        // Check if driver account already exists
+        const existingDriver = await dbHelpers.getDocument(collections.drivers, userId);
+        if (existingDriver) {
+          return res.status(400).json({
+            success: false,
+            message: 'Driver account already exists for this email',
+          });
+        }
+
+        const driverData = {
+          uid: userId,
+          firstName: firstName || existingUser.firstName,
+          lastName: lastName || existingUser.lastName,
+          email,
+          phoneNumber: phoneNumber || existingUser.phoneNumber,
+          carModel: carModel || '',
+          carColor: carColor || '',
+          carRegistration: carRegistration || '',
+          licenseNumber: licenseNumber || '',
+          isActive: false,
+          bankAccountNumber: '',
+          bankAccountName: '',
+          bankName: '',
+          carPicture: null,
+          walletBalance: 0,
+          completedRides: 0,
+          rating: 0,
+          totalRatings: 0,
+          currentLocation: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        await dbHelpers.createDocument(collections.drivers, userId, driverData);
+        
+        // Update user document to reflect driver account type
+        await dbHelpers.updateDocument(collections.users, userId, {
+          accountType: 'driver',
+          updatedAt: new Date(),
+        });
+      } else if (accountType === 'passenger') {
+        // Check if passenger account already exists
+        const existingPassenger = await dbHelpers.getDocument(collections.passengers, userId);
+        if (existingPassenger) {
+          return res.status(400).json({
+            success: false,
+            message: 'Passenger account already exists for this email',
+          });
+        }
+
+        const passengerData = {
+          uid: userId,
+          firstName: firstName || existingUser.firstName,
+          lastName: lastName || existingUser.lastName,
+          email,
+          phoneNumber: phoneNumber || existingUser.phoneNumber,
+          cardDetails: [],
+          emergencyContact: '',
+          completedRides: 0,
+          rating: 0,
+          totalRatings: 0,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        await dbHelpers.createDocument(collections.passengers, userId, passengerData);
+        
+        // Update user document to reflect passenger account type
+        await dbHelpers.updateDocument(collections.users, userId, {
+          accountType: 'passenger',
+          updatedAt: new Date(),
+        });
+      }
+
+      // Generate token
+      const token = generateToken(userId);
+
+      return res.status(201).json({
+        success: true,
+        message: `${accountType.charAt(0).toUpperCase() + accountType.slice(1)} account added successfully`,
+        token,
+        user: {
+          id: userId,
+          firstName: firstName || existingUser.firstName,
+          lastName: lastName || existingUser.lastName,
+          email,
+          accountType,
+        },
       });
     }
 
-    // Hash password
+    // Hash password for new user
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Create user document with unique ID
