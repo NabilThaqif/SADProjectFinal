@@ -256,11 +256,21 @@ exports.getUserProfile = async (req, res) => {
 // Verify phone number
 exports.verifyPhoneNumber = async (req, res) => {
   try {
-    const { phoneNumber, code } = req.body;
+    const { phoneNumber, verificationCode } = req.body;
+
+    // Validate inputs
+    if (!phoneNumber || !verificationCode) {
+      return res.status(400).json({
+        success: false,
+        message: 'Phone number and verification code are required',
+      });
+    }
 
     // Test code verification (for development)
     const testCode = '123456';
-    if (code !== testCode) {
+    
+    // Convert to string for comparison to handle both string and number inputs
+    if (verificationCode.toString() !== testCode) {
       return res.status(400).json({
         success: false,
         message: 'Invalid verification code',
