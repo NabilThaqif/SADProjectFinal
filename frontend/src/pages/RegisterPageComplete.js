@@ -133,10 +133,12 @@ const RegisterPage = () => {
       const response = await authService.register(payload);
 
       if (response.success) {
-        toast.success('Registration successful!');
+        toast.success('Registration successful! Redirecting...');
         setTimeout(() => {
+          // Use the accountType from response or payload to ensure correct routing
+          const userType = response.user?.accountType || accountType;
           navigate(
-            accountType === 'driver'
+            userType === 'driver'
               ? '/driver-dashboard'
               : '/passenger-dashboard'
           );
@@ -375,12 +377,12 @@ const RegisterPage = () => {
                 if (accountType === 'driver') {
                   setStep(4);
                 } else {
-                  setStep(5); // Would handle registration without vehicle info
+                  handleRegister({ preventDefault: () => {} });
                 }
               }}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition duration-300"
             >
-              Continue
+              {accountType === 'passenger' ? 'Complete Registration' : 'Continue'}
             </button>
           </form>
         )}
