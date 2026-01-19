@@ -104,9 +104,10 @@ const MapComponent = ({
             const toPickupLeg = route.legs[0];
             const toDestinationLeg = route.legs[1];
 
+            const totalDurationMinutes = route.legs.reduce((sum, leg) => sum + leg.duration.value, 0) / 60;
             const info = {
               distance: route.legs.reduce((sum, leg) => sum + leg.distance.value, 0) / 1000 + ' km',
-              duration: route.legs.reduce((sum, leg) => sum + leg.duration.value, 0) / 60 + ' mins',
+              duration: totalDurationMinutes.toFixed(1) + ' mins',
               toPickup: {
                 distance: toPickupLeg.distance.text,
                 duration: toPickupLeg.duration.text,
@@ -139,19 +140,20 @@ const MapComponent = ({
             );
             const totalDistance = distToPickup + distToDestination;
             const avgSpeed = 60;
-            const timeToPickup = Math.ceil((distToPickup / avgSpeed) * 60);
-            const timeToDestination = Math.ceil((distToDestination / avgSpeed) * 60);
+            const timeToPickup = (distToPickup / avgSpeed) * 60;
+            const timeToDestination = (distToDestination / avgSpeed) * 60;
+            const totalTime = timeToPickup + timeToDestination;
             
             const info = {
               distance: totalDistance.toFixed(1) + ' km (estimated)',
-              duration: (timeToPickup + timeToDestination) + ' mins (estimated)',
+              duration: totalTime.toFixed(1) + ' mins (estimated)',
               toPickup: {
                 distance: distToPickup.toFixed(1) + ' km',
-                duration: timeToPickup + ' mins',
+                duration: timeToPickup.toFixed(1) + ' mins',
               },
               toDestination: {
                 distance: distToDestination.toFixed(1) + ' km',
-                duration: timeToDestination + ' mins',
+                duration: timeToDestination.toFixed(1) + ' mins',
               },
             };
 
