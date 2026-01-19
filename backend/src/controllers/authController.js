@@ -19,7 +19,6 @@ exports.register = async (req, res) => {
       email,
       phoneNumber,
       password,
-      confirmPassword,
       accountType,
       carModel,
       carColor,
@@ -46,13 +45,6 @@ exports.register = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Password must be at least 6 characters',
-      });
-    }
-
-    if (password !== confirmPassword) {
-      return res.status(400).json({
-        success: false,
-        message: 'Passwords do not match',
       });
     }
 
