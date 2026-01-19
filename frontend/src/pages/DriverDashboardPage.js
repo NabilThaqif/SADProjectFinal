@@ -13,6 +13,7 @@ import {
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import MapComponent from '../components/MapComponent';
+import authService from '../services/authService';
 
 // Real locations to randomize pickup/dropoff data for offers and active rides
 const REAL_LOCATIONS = [
@@ -88,6 +89,33 @@ const DriverDashboard = () => {
   const [driverDropoffCoords, setDriverDropoffCoords] = useState(null);
   const [routeInfo, setRouteInfo] = useState(null);
   const [rideHistory, setRideHistory] = useState([]);
+  const [userData, setUserData] = useState(null);
+
+  // Load user data on component mount
+  useEffect(() => {
+    const loadUserProfile = async () => {
+      try {
+        const user = authService.getCurrentUser();
+        if (user) {
+          // Try to get full profile from API
+          try {
+            const response = await authService.getUserProfile();
+            if (response.success) {
+              setUserData(response.user);
+            } else {
+              setUserData(user);
+            }
+          } catch (err) {
+            // Fallback to localStorage user data
+            setUserData(user);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading profile:', error);
+      }
+    };
+    loadUserProfile();
+  }, []);
 
   // Resolve pickup/dropoff coordinates when a ride becomes active
   useEffect(() => {
@@ -697,8 +725,9 @@ const DriverDashboard = () => {
                       </label>
                       <input
                         type="text"
-                        defaultValue="Mohammad"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                        value={userData?.firstName || ''}
+                        readOnly
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-500"
                       />
                     </div>
                     <div>
@@ -707,8 +736,9 @@ const DriverDashboard = () => {
                       </label>
                       <input
                         type="text"
-                        defaultValue="Ali"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                        value={userData?.lastName || ''}
+                        readOnly
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-500"
                       />
                     </div>
                   </div>
@@ -720,8 +750,9 @@ const DriverDashboard = () => {
                       </label>
                       <input
                         type="text"
-                        defaultValue="Toyota Vios"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                        value={userData?.carModel || ''}
+                        readOnly
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-500"
                       />
                     </div>
                     <div>
@@ -730,8 +761,9 @@ const DriverDashboard = () => {
                       </label>
                       <input
                         type="text"
-                        defaultValue="WXY1234"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                        value={userData?.carRegistration || ''}
+                        readOnly
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-500"
                       />
                     </div>
                   </div>

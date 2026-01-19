@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FiMap, FiCheck, FiMessageCircle, FiStar } from 'react-icons/fi';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -7,6 +7,7 @@ import LocationAutocomplete from '../components/LocationAutocomplete';
 import { Elements } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
 import PaymentForm from '../components/PaymentForm';
+import authService from '../services/authService';
 
 // Initialize Stripe
 const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY);
@@ -38,6 +39,33 @@ const PassengerDashboard = () => {
   const [estimatedFare, setEstimatedFare] = useState(null);
   const [pickupCoords, setPickupCoords] = useState(null);
   const [dropoffCoords, setDropoffCoords] = useState(null);
+  const [userData, setUserData] = useState(null);
+
+  // Load user data on component mount
+  useEffect(() => {
+    const loadUserProfile = async () => {
+      try {
+        const user = authService.getCurrentUser();
+        if (user) {
+          // Try to get full profile from API
+          try {
+            const response = await authService.getUserProfile();
+            if (response.success) {
+              setUserData(response.user);
+            } else {
+              setUserData(user);
+            }
+          } catch (err) {
+            // Fallback to localStorage user data
+            setUserData(user);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading profile:', error);
+      }
+    };
+    loadUserProfile();
+  }, []);
   const [currentRide, setCurrentRide] = useState(null);
   const [showPayment, setShowPayment] = useState(false);
   const [routeInfo, setRouteInfo] = useState(null);
@@ -582,8 +610,9 @@ const PassengerDashboard = () => {
                       </label>
                       <input
                         type="text"
-                        defaultValue="Ahmad"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value={userData?.firstName || ''}
+                        readOnly
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
                     <div>
@@ -592,8 +621,9 @@ const PassengerDashboard = () => {
                       </label>
                       <input
                         type="text"
-                        defaultValue="Hassan"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value={userData?.lastName || ''}
+                        readOnly
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
                   </div>
@@ -603,8 +633,9 @@ const PassengerDashboard = () => {
                     </label>
                     <input
                       type="email"
-                      defaultValue="ahmad@example.com"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={userData?.email || ''}
+                      readOnly
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
@@ -613,8 +644,9 @@ const PassengerDashboard = () => {
                     </label>
                     <input
                       type="tel"
-                      defaultValue="+60123456789"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={userData?.phoneNumber || ''}
+                      readOnly
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
