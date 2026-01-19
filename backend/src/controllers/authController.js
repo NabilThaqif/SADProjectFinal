@@ -260,7 +260,7 @@ exports.register = async (req, res) => {
 // Login user
 exports.login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, accountType } = req.body;
 
     // Validation
     if (!email || !password) {
@@ -290,6 +290,41 @@ exports.login = async (req, res) => {
       });
     }
 
+    // Check if user has both passenger and driver accounts
+    const hasDriverAccount = await dbHelpers.getDocument(collections.drivers, user.uid);
+    const hasPassengerAccount = await dbHelpers.getDocument(collections.passengers, user.uid);
+    const hasBothAccounts = hasDriverAccount && hasPassengerAccount;
+
+    // If user has both accounts and hasn't selected account type, prompt for selection
+    if (hasBothAccounts && !accountType) {
+      return res.status(200).json({
+        success: true,
+        requiresAccountSelection: true,
+        message: 'Please select account type',
+        availableAccountTypes: ['passenger', 'driver'],
+      });
+    }
+
+    // Determine which account type to use
+    let selectedAccountType = accountType || user.accountType;
+
+    // If account type is specified, verify it exists
+    if (accountType) {
+      if (accountType === 'driver' && !hasDriverAccount) {
+        return res.status(400).json({
+          success: false,
+          message: 'Driver account not found',
+        });
+      }
+      if (accountType === 'passenger' && !hasPassengerAccount) {
+        return res.status(400).json({
+          success: false,
+          message: 'Passenger account not found',
+        });
+      }
+      selectedAccountType = accountType;
+    }
+
     // Generate token
     const token = generateToken(user.uid);
 
@@ -302,8 +337,9 @@ exports.login = async (req, res) => {
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email,
-        accountType: user.accountType,
+        accountType: selectedAccountType,
         rating: user.rating,
+        hasBothAccounts,
       },
     });
   } catch (error) {

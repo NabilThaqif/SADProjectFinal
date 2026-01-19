@@ -10,13 +10,22 @@ const Login = () => {
   const [password, setPassword] = useState('password123');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showAccountTypeSelection, setShowAccountTypeSelection] = useState(false);
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
+  const handleLogin = async (e, selectedAccountType = null) => {
+    if (e) e.preventDefault();
     setLoading(true);
 
     try {
-      const response = await authService.login(email, password);
+      const response = await authService.login(email, password, selectedAccountType);
+      
+      // Check if account type selection is required
+      if (response.requiresAccountSelection) {
+        setShowAccountTypeSelection(true);
+        setLoading(false);
+        return;
+      }
+      
       if (response.success) {
         toast.success('Login successful!');
         setTimeout(() => {
@@ -29,13 +38,51 @@ const Login = () => {
     } catch (err) {
       toast.error(err.message || 'Login failed');
     } finally {
-      setLoading(false);
+      if (!showAccountTypeSelection) {
+        setLoading(false);
+      }
     }
+  };
+
+  const handleAccountTypeSelection = (accountType) => {
+    setShowAccountTypeSelection(false);
+    handleLogin(null, accountType);
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4">
       <ToastContainer position="top-right" autoClose={3000} />
+      
+      {/* Account Type Selection Modal */}
+      {showAccountTypeSelection && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">Select Account Type</h2>
+            <p className="text-gray-600 mb-6">You have both passenger and driver accounts. Please choose which account to access:</p>
+            
+            <div className="space-y-4">
+              <button
+                onClick={() => handleAccountTypeSelection('passenger')}
+                className="w-full p-6 border-2 border-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition"
+              >
+                <div className="text-4xl mb-2">👤</div>
+                <h3 className="font-bold text-gray-800 text-lg">Passenger</h3>
+                <p className="text-sm text-gray-600">Book and take rides</p>
+              </button>
+              
+              <button
+                onClick={() => handleAccountTypeSelection('driver')}
+                className="w-full p-6 border-2 border-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition"
+              >
+                <div className="text-4xl mb-2">🚗</div>
+                <h3 className="font-bold text-gray-800 text-lg">Driver</h3>
+                <p className="text-sm text-gray-600">Offer rides and earn money</p>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8">
         <h1 className="text-3xl font-bold text-gray-800 mb-2">Welcome Back</h1>
         <p className="text-gray-600 mb-8">Login to your UPM Student Cab account</p>

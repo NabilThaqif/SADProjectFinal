@@ -18,16 +18,25 @@ const authService = {
   },
 
   // Login user
-  login: async (email, password) => {
+  login: async (email, password, accountType = null) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/auth/login`, {
+      const payload = {
         email,
         password,
-      });
-      if (response.data.token) {
+      };
+      
+      if (accountType) {
+        payload.accountType = accountType;
+      }
+      
+      const response = await axios.post(`${API_BASE_URL}/auth/login`, payload);
+      
+      // Only store token and user if login is complete (not requiring account selection)
+      if (response.data.token && !response.data.requiresAccountSelection) {
         localStorage.setItem('token', response.data.token);
         localStorage.setItem('user', JSON.stringify(response.data.user));
       }
+      
       return response.data;
     } catch (error) {
       throw error.response?.data || { message: 'Login failed' };
