@@ -72,7 +72,7 @@ const PassengerDashboard = () => {
   const [rideCompleted, setRideCompleted] = useState(false);
   const [driverRating, setDriverRating] = useState(0);
   const [showRatingPrompt, setShowRatingPrompt] = useState(false);
-  const rideHistory = [
+  const [rideHistory, setRideHistory] = useState([
     {
       id: 'ride1',
       date: '2024-01-15',
@@ -91,7 +91,7 @@ const PassengerDashboard = () => {
       fare: 12.0,
       status: 'completed',
     },
-  ];
+  ]);
 
   const calculateFare = async () => {
     if (!pickupLocation || !dropoffLocation) {
@@ -225,6 +225,21 @@ const PassengerDashboard = () => {
       toast.warning('Please select a rating');
       return;
     }
+    
+    // Add completed ride to history
+    const completedRideEntry = {
+      id: `ride${Date.now()}`,
+      date: new Date().toISOString().split('T')[0],
+      driver: currentRide.driver.name,
+      from: pickupLocation,
+      to: dropoffLocation,
+      fare: estimatedFare,
+      status: 'completed',
+      rating: driverRating,
+    };
+    
+    setRideHistory([completedRideEntry, ...rideHistory]);
+    
     toast.success(`Thank you! You rated ${currentRide.driver.name} ${driverRating} star${driverRating !== 1 ? 's' : ''}`);
     setRideCompleted(true);
     setShowRatingPrompt(false);
@@ -232,7 +247,7 @@ const PassengerDashboard = () => {
       setCurrentRide(null);
       setRideCompleted(false);
       setDriverRating(0);
-      setActiveTab('search');
+      setActiveTab('history'); // Switch to history tab to show the new ride
     }, 2000);
   };
 
