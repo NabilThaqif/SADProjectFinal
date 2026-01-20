@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   FiMap,
   FiDollarSign,
@@ -76,6 +77,7 @@ const buildRandomOffer = (id) => {
 };
 
 const DriverDashboard = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isActive, setIsActive] = useState(true);
   const [rideOffers, setRideOffers] = useState(() => [
@@ -116,6 +118,11 @@ const DriverDashboard = () => {
     };
     loadUserProfile();
   }, []);
+
+  const handleLogout = () => {
+    authService.logout();
+    navigate('/login');
+  };
 
   // Resolve pickup/dropoff coordinates when a ride becomes active
   useEffect(() => {
@@ -291,7 +298,7 @@ const DriverDashboard = () => {
             <span className="text-gray-100">
               {userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() : 'Loading...'}
             </span>
-            <button className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded">Logout</button>
+            <button onClick={handleLogout} className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded">Logout</button>
           </div>
         </div>
       </header>

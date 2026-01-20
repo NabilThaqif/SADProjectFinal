@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { FiMap, FiCheck, FiMessageCircle, FiStar } from 'react-icons/fi';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -33,6 +34,7 @@ const getCoordinates = (locationName) => {
 };
 
 const PassengerDashboard = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('search');
   const [pickupLocation, setPickupLocation] = useState('');
   const [dropoffLocation, setDropoffLocation] = useState('');
@@ -66,6 +68,12 @@ const PassengerDashboard = () => {
     };
     loadUserProfile();
   }, []);
+
+  const handleLogout = () => {
+    authService.logout();
+    navigate('/login');
+  };
+
   const [currentRide, setCurrentRide] = useState(null);
   const [showPayment, setShowPayment] = useState(false);
   const [routeInfo, setRouteInfo] = useState(null);
@@ -266,7 +274,7 @@ const PassengerDashboard = () => {
             <span className="text-gray-700">
               {userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() : 'Loading...'}
             </span>
-            <button className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">
+            <button onClick={handleLogout} className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">
               Logout
             </button>
           </div>
