@@ -150,7 +150,10 @@ const PassengerDashboard = () => {
               const location = results[0].geometry.location;
               resolve({ lat: location.lat(), lng: location.lng() });
             } else {
-              reject(new Error(`Location "${locationName}" not found. Status: ${status}`));
+              if (status === 'REQUEST_DENIED') {
+                console.error('⚠️ Geocoding API REQUEST_DENIED: Enable Geocoding API in Google Cloud Console');
+              }
+              reject(new Error(`Location "${locationName}" not found. Status: ${status}. ${status === 'REQUEST_DENIED' ? 'Please enable Geocoding API in Google Cloud Console' : ''}`));
             }
           });
         });

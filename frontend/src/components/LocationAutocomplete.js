@@ -72,7 +72,10 @@ const LocationAutocomplete = ({ value, onChange, placeholder }) => {
             setSuggestions([]);
             setShowSuggestions(false);
           } else {
-            console.error('Error fetching autocomplete predictions:', status);
+            console.error('Places API Error:', status);
+            if (status === 'REQUEST_DENIED') {
+              console.error('⚠️ REQUEST_DENIED: Please enable Places API in Google Cloud Console and check API key restrictions');
+            }
             setSuggestions([]);
             setShowSuggestions(false);
           }
