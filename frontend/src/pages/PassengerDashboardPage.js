@@ -4,34 +4,15 @@ import { FiMap, FiCheck, FiMessageCircle, FiStar } from 'react-icons/fi';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import MapComponent from '../components/MapComponent';
-import LocationAutocomplete from '../components/LocationAutocomplete';
+import FreeLocationAutocomplete from '../components/FreeLocationAutocomplete';
 import { Elements } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
 import PaymentForm from '../components/PaymentForm';
 import authService from '../services/authService';
+import { calculateRoute, calculateFare } from '../utils/freeGeocoding';
 
 // Initialize Stripe
 const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY);
-
-// Location coordinates mapping for UPM area
-const LOCATION_COORDINATES = {
-  'UPM Main Gate': { lat: 3.1245, lng: 101.6878 },
-  'Pavilion KL': { lat: 3.1575, lng: 101.6804 },
-  'Sungai Long LRT Station': { lat: 3.0428, lng: 101.8043 },
-  'Mid Valley Megamall': { lat: 3.1179, lng: 101.6779 },
-  'One Utama': { lat: 3.1477, lng: 101.6146 },
-  'Kota Damansara': { lat: 3.1728, lng: 101.5872 },
-  'UPM Library': { lat: 3.1235, lng: 101.6850 },
-  'UPM Sports Complex': { lat: 3.1180, lng: 101.6920 },
-  'Cyberjaya': { lat: 2.9258, lng: 101.6158 },
-  'Setiawangsa': { lat: 3.1667, lng: 101.6833 },
-  'Fakulti Sains Komputer dan Teknologi Maklumat': { lat: 3.0041, lng: 101.6901 },
-  'KLIA Terminal 1': { lat: 2.7450, lng: 101.7097 },
-};
-
-const getCoordinates = (locationName) => {
-  return LOCATION_COORDINATES[locationName] || { lat: 3.1219, lng: 101.6869 }; // Default to UPM center
-};
 
 const PassengerDashboard = () => {
   const navigate = useNavigate();
@@ -42,21 +23,6 @@ const PassengerDashboard = () => {
   const [pickupCoords, setPickupCoords] = useState(null);
   const [dropoffCoords, setDropoffCoords] = useState(null);
   const [userData, setUserData] = useState(null);
-  const [googleMapsLoaded, setGoogleMapsLoaded] = useState(false);
-
-  // Check if Google Maps is loaded
-  useEffect(() => {
-    const checkGoogleMaps = () => {
-      if (window.google && window.google.maps && window.google.maps.places) {
-        setGoogleMapsLoaded(true);
-        console.log('Google Maps API verified as loaded');
-      } else {
-        console.log('Google Maps not yet loaded, checking again...');
-        setTimeout(checkGoogleMaps, 500);
-      }
-    };
-    checkGoogleMaps();
-  }, []);
 
   // Load user data on component mount
   useEffect(() => {
@@ -116,95 +82,49 @@ const PassengerDashboard = () => {
     },
   ]);
 
-  const calculateFare = async () => {
+  const calculateFareEstimate = async () => {
     if (!pickupLocation || !dropoffLocation) {
       toast.warning('Please enter both pickup and dropoff locations');
       return;
     }
 
-    // Check if Google Maps is loaded
-    if (!window.google || !window.google.maps) {
-      toast.error('Google Maps is not loaded. Please refresh the page.');
-      console.error('Google Maps not loaded');
+    if (!pickupCoords || !dropoffCoords) {
+      toast.warning('Please select locations from the dropdown menu');
       return;
     }
 
     try {
-      console.log('Calculating fare for:', { pickupLocation, dropoffLocation });
+      console.log('Calculating fare for:', { pickupCoords, dropoffCoords });
+      toast.info('Calculating route...');
 
-      // Use Google Geocoding API to get coordinates from location names
-      const geocodeLocation = async (locationName) => {
-        // First try to match with predefined coordinates
-        if (LOCATION_COORDINATES[locationName]) {
-          console.log('Using predefined coordinates for:', locationName);
-          return LOCATION_COORDINATES[locationName];
-        }
+      // Use free OSRM routing service
+      const routeData = await calculateRoute(
+        pickupCoords.lat,
+        pickupCoords.lng,
+        dropoffCoords.lat,
+        dropoffCoords.lng
+      );
 
-        // Otherwise use Google Geocoding API
-        console.log('Geocoding location:', locationName);
-        const geocoder = new window.google.maps.Geocoder();
-        return new Promise((resolve, reject) => {
-          geocoder.geocode({ address: locationName }, (results, status) => {
-            console.log('Geocode result:', status, results);
-            if (status === 'OK' && results[0]) {
-              const location = results[0].geometry.location;
-              resolve({ lat: location.lat(), lng: location.lng() });
-            } else {
-              if (status === 'REQUEST_DENIED') {
-                console.error('⚠️ Geocoding API REQUEST_DENIED: Enable Geocoding API in Google Cloud Console');
-              }
-              reject(new Error(`Location "${locationName}" not found. Status: ${status}. ${status === 'REQUEST_DENIED' ? 'Please enable Geocoding API in Google Cloud Console' : ''}`));
-            }
-          });
-        });
-      };
+      const distanceKm = parseFloat(routeData.distanceKm);
+      const fare = calculateFare(distanceKm);
 
-      // Get coordinates for both locations
-      const pickup = await geocodeLocation(pickupLocation);
-      const dropoff = await geocodeLocation(dropoffLocation);
-      
-      console.log('Resolved coordinates:', { pickup, dropoff });
-      
-      // Store coordinates for later use in booking
-      setPickupCoords(pickup);
-      setDropoffCoords(dropoff);
+      console.log('Fare calculated:', { distanceKm, fare });
 
-      // Use Google Distance Matrix (client-side) for road distance
-      const distanceService = new window.google.maps.DistanceMatrixService();
-
-      const element = await new Promise((resolve, reject) => {
-        distanceService.getDistanceMatrix(
-          {
-            origins: [{ lat: pickup.lat, lng: pickup.lng }],
-            destinations: [{ lat: dropoff.lat, lng: dropoff.lng }],
-            travelMode: window.google.maps.TravelMode.DRIVING,
-            unitSystem: window.google.maps.UnitSystem.METRIC,
-          },
-          (response, status) => {
-            console.log('Distance Matrix response:', status, response);
-            const el = response?.rows?.[0]?.elements?.[0];
-            if (status === 'OK' && el?.status === 'OK') {
-              resolve(el);
-            } else {
-              reject(new Error(`Distance Matrix error: ${status}. Element status: ${el?.status || 'N/A'}`));
-            }
-          }
-        );
-      });
-
-      const distanceInMeters = element.distance.value;
-      const distanceInKm = distanceInMeters / 1000;
-
-      // Fare calculation: RM 1 per kilometer (no base fare)
-      const fare = distanceInKm * 1.0;
-
-      console.log('Fare calculated:', { distanceInKm, fare });
-
-      setEstimatedFare(fare.toFixed(2));
-      toast.success(`Estimated fare: RM ${fare.toFixed(2)} (${distanceInKm.toFixed(1)} km)`);
+      setEstimatedFare(fare);
+      toast.success(`Estimated fare: RM ${fare} (${distanceKm} km, ~${routeData.durationMinutes} mins)`);
     } catch (error) {
       console.error('Error calculating fare:', error);
-      toast.error(`Failed to calculate fare: ${error.message}`);
+      toast.error('Failed to calculate fare. Please try again.');
+    }
+  };
+
+  const handleLocationChange = (location, coords, isPickup) => {
+    if (isPickup) {
+      setPickupLocation(location);
+      if (coords) setPickupCoords(coords);
+    } else {
+      setDropoffLocation(location);
+      if (coords) setDropoffCoords(coords);
     }
   };
 
@@ -342,19 +262,17 @@ const PassengerDashboard = () => {
             <div className="lg:col-span-2">
               <div className="bg-white rounded-lg shadow p-6" style={{ overflow: 'visible' }}>
                 <h2 className="text-2xl font-bold text-gray-800 mb-6">Search & Book Ride</h2>
-                {!googleMapsLoaded && (
-                  <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg mb-4">
-                    <p className="text-sm">⏳ Loading Google Maps... Please wait.</p>
-                  </div>
-                )}
+                <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg mb-4">
+                  <p className="text-sm">✓ Using free OpenStreetMap service - No API limits!</p>
+                </div>
                 <div className="space-y-4" style={{ overflow: 'visible' }}>
                   <div style={{ overflow: 'visible' }}>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
                       Pickup Location
                     </label>
-                    <LocationAutocomplete
+                    <FreeLocationAutocomplete
                       value={pickupLocation}
-                      onChange={setPickupLocation}
+                      onChange={(location, coords) => handleLocationChange(location, coords, true)}
                       placeholder="Enter pickup location..."
                     />
                   </div>
@@ -362,22 +280,22 @@ const PassengerDashboard = () => {
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
                       Dropoff Location
                     </label>
-                    <LocationAutocomplete
+                    <FreeLocationAutocomplete
                       value={dropoffLocation}
-                      onChange={setDropoffLocation}
+                      onChange={(location, coords) => handleLocationChange(location, coords, false)}
                       placeholder="Enter dropoff location..."
                     />
                   </div>
                   <button
-                    onClick={calculateFare}
-                    disabled={!googleMapsLoaded || !pickupLocation || !dropoffLocation}
+                    onClick={calculateFareEstimate}
+                    disabled={!pickupLocation || !dropoffLocation}
                     className={`w-full font-semibold py-3 rounded-lg transition ${
-                      !googleMapsLoaded || !pickupLocation || !dropoffLocation
-                        ? 'bg-gray-400 cursor-not-allowed'
+                      !pickupLocation || !dropoffLocation
+                        ? 'bg-gray-400 cursor-not-allowed text-white'
                         : 'bg-blue-600 hover:bg-blue-700 text-white'
                     }`}
                   >
-                    {!googleMapsLoaded ? 'Loading Maps...' : 'Search Rides'}
+                    Search Rides
                   </button>
                 </div>
               </div>
