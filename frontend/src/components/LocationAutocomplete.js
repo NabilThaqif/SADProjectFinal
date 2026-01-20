@@ -15,7 +15,7 @@ const LocationAutocomplete = ({ value, onChange, placeholder }) => {
     }
   }, []);
 
-  const handleInputChange = async (e) => {
+  const handleInputChange = (e) => {
     const inputValue = e.target.value;
     onChange(inputValue);
 
@@ -25,9 +25,9 @@ const LocationAutocomplete = ({ value, onChange, placeholder }) => {
       return;
     }
 
-    try {
-      if (autocompleteServiceRef.current) {
-        const predictions = await autocompleteServiceRef.current.getPlacePredictions({
+    if (autocompleteServiceRef.current) {
+      autocompleteServiceRef.current.getPlacePredictions(
+        {
           input: inputValue,
           sessionToken: sessionTokenRef.current,
           componentRestrictions: { country: 'my' }, // Restrict to Malaysia
@@ -37,15 +37,19 @@ const LocationAutocomplete = ({ value, onChange, placeholder }) => {
             east: 104,
             west: 100,
           },
-        });
-
-        setSuggestions(predictions.predictions || []);
-        setShowSuggestions(true);
-        setActiveSuggestion(-1);
-      }
-    } catch (error) {
-      console.error('Error fetching autocomplete predictions:', error);
-      setSuggestions([]);
+        },
+        (predictions, status) => {
+          if (status === window.google.maps.places.PlacesServiceStatus.OK && predictions) {
+            setSuggestions(predictions);
+            setShowSuggestions(true);
+            setActiveSuggestion(-1);
+          } else {
+            console.error('Error fetching autocomplete predictions:', status);
+            setSuggestions([]);
+            setShowSuggestions(false);
+          }
+        }
+      );
     }
   };
 
