@@ -108,11 +108,11 @@ const PassengerDashboard = () => {
 
       const distanceKm = parseFloat(routeData.distanceKm);
       const fare = calculateFare(distanceKm);
-, geometry: routeData.geometry });
+
+      console.log('Fare calculated:', { distanceKm, fare, geometry: routeData.geometry });
 
       // Store route geometry for map display
-      setRouteGeometry(routeData.geometry);      console.log('Fare calculated:', { distanceKm, fare });
-
+      setRouteGeometry(routeData.geometry);
       setEstimatedFare(fare);
       toast.success(`Estimated fare: RM ${fare} (${distanceKm} km, ~${routeData.durationMinutes} mins)`);
     } catch (error) {
@@ -394,13 +394,11 @@ const PassengerDashboard = () => {
               <div className="bg-white rounded-lg shadow p-6">
                 <h2 className="text-lg font-bold text-gray-800 mb-4">Live Route</h2>
                 {currentRide.pickupLocation && currentRide.dropoffLocation ? (
-                  <MapComponent
-                    driverLocation={currentRide.driverLocation}
+                  <FreeMapComponent
                     pickupLocation={currentRide.pickupLocation}
-                    destinationLocation={currentRide.dropoffLocation}
-                    showRoute={true}
-                    center={currentRide.driverLocation}
-                    onRouteCalculated={(info) => setRouteInfo(info)}
+                    dropoffLocation={currentRide.dropoffLocation}
+                    routeGeometry={routeGeometry}
+                    height="400px"
                   />
                 ) : (
                   <p className="text-sm text-gray-500">Loading route…</p>
