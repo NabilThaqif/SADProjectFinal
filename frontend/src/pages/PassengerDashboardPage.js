@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { FiMap, FiCheck, FiMessageCircle, FiStar } from 'react-icons/fi';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import MapComponent from '../components/MapComponent';
+import FreeMapComponent from '../components/FreeMapComponent';
 import FreeLocationAutocomplete from '../components/FreeLocationAutocomplete';
 import { Elements } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
@@ -23,6 +23,7 @@ const PassengerDashboard = () => {
   const [pickupCoords, setPickupCoords] = useState(null);
   const [dropoffCoords, setDropoffCoords] = useState(null);
   const [userData, setUserData] = useState(null);
+  const [routeGeometry, setRouteGeometry] = useState(null);
 
   // Load user data on component mount
   useEffect(() => {
@@ -107,8 +108,10 @@ const PassengerDashboard = () => {
 
       const distanceKm = parseFloat(routeData.distanceKm);
       const fare = calculateFare(distanceKm);
+, geometry: routeData.geometry });
 
-      console.log('Fare calculated:', { distanceKm, fare });
+      // Store route geometry for map display
+      setRouteGeometry(routeData.geometry);      console.log('Fare calculated:', { distanceKm, fare });
 
       setEstimatedFare(fare);
       toast.success(`Estimated fare: RM ${fare} (${distanceKm} km, ~${routeData.durationMinutes} mins)`);
@@ -320,6 +323,19 @@ const PassengerDashboard = () => {
                   </div>
                   <p className="text-xs text-blue-100 mt-3">Rate: RM 1.00 per km (no base fare)</p>
                 </div>
+                
+                {/* Route Map Preview */}
+                {pickupCoords && dropoffCoords && routeGeometry && (
+                  <div className="mt-4">
+                    <FreeMapComponent
+                      pickupLocation={pickupCoords}
+                      dropoffLocation={dropoffCoords}
+                      routeGeometry={routeGeometry}
+                      height="250px"
+                    />
+                  </div>
+                )}
+                
                 <button
                   onClick={bookRide}
                   className="w-full bg-white text-blue-600 font-semibold py-3 rounded-lg mt-6 hover:bg-gray-100 transition"
