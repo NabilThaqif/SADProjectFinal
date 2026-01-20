@@ -204,34 +204,6 @@ const PassengerDashboard = () => {
       toast.error(`Failed to calculate fare: ${error.message}`);
     }
   };
-            destinations: [{ lat: dropoff.lat, lng: dropoff.lng }],
-            travelMode: window.google.maps.TravelMode.DRIVING,
-            unitSystem: window.google.maps.UnitSystem.METRIC,
-          },
-          (response, status) => {
-            const el = response?.rows?.[0]?.elements?.[0];
-            if (status === 'OK' && el?.status === 'OK') {
-              resolve(el);
-            } else {
-              reject(new Error(`Distance Matrix error: ${status}`));
-            }
-          }
-        );
-      });
-
-      const distanceInMeters = element.distance.value;
-      const distanceInKm = distanceInMeters / 1000;
-
-      // Fare calculation: RM 1 per kilometer (no base fare)
-      const fare = distanceInKm * 1.0;
-
-      setEstimatedFare(fare.toFixed(2));
-      toast.info(`Estimated fare: RM ${fare.toFixed(2)} (${distanceInKm.toFixed(1)} km)`);
-    } catch (error) {
-      console.error('Error calculating fare:', error);
-      toast.error('Failed to calculate fare. Please check your locations.');
-    }
-  };
 
   const bookRide = () => {
     if (!estimatedFare) {
