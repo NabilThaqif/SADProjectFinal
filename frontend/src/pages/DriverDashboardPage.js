@@ -288,7 +288,9 @@ const DriverDashboard = () => {
                 </button>
               )}
             </div>
-            <span className="text-gray-100">Mohammad Ali</span>
+            <span className="text-gray-100">
+              {userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() : 'Loading...'}
+            </span>
             <button className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded">Logout</button>
           </div>
         </div>

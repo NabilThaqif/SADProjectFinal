@@ -263,7 +263,9 @@ const PassengerDashboard = () => {
             <h1 className="text-2xl font-bold text-gray-800">UPM Student Cab</h1>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-gray-700">Ahmad Hassan</span>
+            <span className="text-gray-700">
+              {userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() : 'Loading...'}
+            </span>
             <button className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">
               Logout
             </button>
