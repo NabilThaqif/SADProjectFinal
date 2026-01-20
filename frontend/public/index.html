@@ -13,6 +13,18 @@
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyC4GaVk_Bn3WYJw4w3MpG5CXrveNrbneqg&libraries=places,geometry,directions"></script>
+    <script>
+      window.GOOGLE_MAPS_LOADED = false;
+      window.initGoogleMaps = function() {
+        window.GOOGLE_MAPS_LOADED = true;
+        console.log('Google Maps loaded successfully');
+      };
+    </script>
+    <script 
+      src="https://maps.googleapis.com/maps/api/js?key=AIzaSyC4GaVk_Bn3WYJw4w3MpG5CXrveNrbneqg&libraries=places,geometry,directions&callback=initGoogleMaps"
+      async
+      defer
+      onerror="console.error('Failed to load Google Maps API')"
+    ></script>
   </body>
 </html>

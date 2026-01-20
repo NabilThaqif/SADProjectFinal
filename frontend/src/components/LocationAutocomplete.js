@@ -9,10 +9,22 @@ const LocationAutocomplete = ({ value, onChange, placeholder }) => {
 
   // Initialize Places Autocomplete Service and Session Token
   useEffect(() => {
-    if (window.google && window.google.maps && window.google.maps.places) {
-      autocompleteServiceRef.current = new window.google.maps.places.AutocompleteService();
-      sessionTokenRef.current = new window.google.maps.places.AutocompleteSessionToken();
-    }
+    const initializeAutocomplete = () => {
+      if (window.google && window.google.maps && window.google.maps.places) {
+        try {
+          autocompleteServiceRef.current = new window.google.maps.places.AutocompleteService();
+          sessionTokenRef.current = new window.google.maps.places.AutocompleteSessionToken();
+          console.log('Google Places Autocomplete initialized successfully');
+        } catch (error) {
+          console.error('Error initializing autocomplete:', error);
+        }
+      } else {
+        console.warn('Google Maps not yet loaded, retrying...');
+        setTimeout(initializeAutocomplete, 500);
+      }
+    };
+    
+    initializeAutocomplete();
   }, []);
 
   const handleInputChange = (e) => {
@@ -23,6 +35,17 @@ const LocationAutocomplete = ({ value, onChange, placeholder }) => {
       setSuggestions([]);
       setShowSuggestions(false);
       return;
+    }
+
+    if (!window.google || !window.google.maps || !window.google.maps.places) {
+      console.error('Google Maps API not loaded');
+      return;
+    }
+
+    if (!autocompleteServiceRef.current) {
+      console.error('Autocomplete service not initialized');
+      autocompleteServiceRef.current = new window.google.maps.places.AutocompleteService();
+      sessionTokenRef.current = new window.google.maps.places.AutocompleteSessionToken();
     }
 
     if (autocompleteServiceRef.current) {
@@ -39,10 +62,15 @@ const LocationAutocomplete = ({ value, onChange, placeholder }) => {
           },
         },
         (predictions, status) => {
+          console.log('Autocomplete status:', status, 'Predictions:', predictions);
           if (status === window.google.maps.places.PlacesServiceStatus.OK && predictions) {
             setSuggestions(predictions);
             setShowSuggestions(true);
             setActiveSuggestion(-1);
+          } else if (status === window.google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+            console.log('No results found for:', inputValue);
+            setSuggestions([]);
+            setShowSuggestions(false);
           } else {
             console.error('Error fetching autocomplete predictions:', status);
             setSuggestions([]);

@@ -42,6 +42,21 @@ const PassengerDashboard = () => {
   const [pickupCoords, setPickupCoords] = useState(null);
   const [dropoffCoords, setDropoffCoords] = useState(null);
   const [userData, setUserData] = useState(null);
+  const [googleMapsLoaded, setGoogleMapsLoaded] = useState(false);
+
+  // Check if Google Maps is loaded
+  useEffect(() => {
+    const checkGoogleMaps = () => {
+      if (window.google && window.google.maps && window.google.maps.places) {
+        setGoogleMapsLoaded(true);
+        console.log('Google Maps API verified as loaded');
+      } else {
+        console.log('Google Maps not yet loaded, checking again...');
+        setTimeout(checkGoogleMaps, 500);
+      }
+    };
+    checkGoogleMaps();
+  }, []);
 
   // Load user data on component mount
   useEffect(() => {
@@ -107,23 +122,35 @@ const PassengerDashboard = () => {
       return;
     }
 
+    // Check if Google Maps is loaded
+    if (!window.google || !window.google.maps) {
+      toast.error('Google Maps is not loaded. Please refresh the page.');
+      console.error('Google Maps not loaded');
+      return;
+    }
+
     try {
+      console.log('Calculating fare for:', { pickupLocation, dropoffLocation });
+
       // Use Google Geocoding API to get coordinates from location names
       const geocodeLocation = async (locationName) => {
         // First try to match with predefined coordinates
         if (LOCATION_COORDINATES[locationName]) {
+          console.log('Using predefined coordinates for:', locationName);
           return LOCATION_COORDINATES[locationName];
         }
 
         // Otherwise use Google Geocoding API
+        console.log('Geocoding location:', locationName);
         const geocoder = new window.google.maps.Geocoder();
         return new Promise((resolve, reject) => {
           geocoder.geocode({ address: locationName }, (results, status) => {
+            console.log('Geocode result:', status, results);
             if (status === 'OK' && results[0]) {
               const location = results[0].geometry.location;
               resolve({ lat: location.lat(), lng: location.lng() });
             } else {
-              reject(new Error('Location not found'));
+              reject(new Error(`Location "${locationName}" not found. Status: ${status}`));
             }
           });
         });
@@ -133,21 +160,50 @@ const PassengerDashboard = () => {
       const pickup = await geocodeLocation(pickupLocation);
       const dropoff = await geocodeLocation(dropoffLocation);
       
+      console.log('Resolved coordinates:', { pickup, dropoff });
+      
       // Store coordinates for later use in booking
       setPickupCoords(pickup);
       setDropoffCoords(dropoff);
 
       // Use Google Distance Matrix (client-side) for road distance
-      if (!window.google || !window.google.maps) {
-        throw new Error('Google Maps not loaded');
-      }
-
       const distanceService = new window.google.maps.DistanceMatrixService();
 
       const element = await new Promise((resolve, reject) => {
         distanceService.getDistanceMatrix(
           {
             origins: [{ lat: pickup.lat, lng: pickup.lng }],
+            destinations: [{ lat: dropoff.lat, lng: dropoff.lng }],
+            travelMode: window.google.maps.TravelMode.DRIVING,
+            unitSystem: window.google.maps.UnitSystem.METRIC,
+          },
+          (response, status) => {
+            console.log('Distance Matrix response:', status, response);
+            const el = response?.rows?.[0]?.elements?.[0];
+            if (status === 'OK' && el?.status === 'OK') {
+              resolve(el);
+            } else {
+              reject(new Error(`Distance Matrix error: ${status}. Element status: ${el?.status || 'N/A'}`));
+            }
+          }
+        );
+      });
+
+      const distanceInMeters = element.distance.value;
+      const distanceInKm = distanceInMeters / 1000;
+
+      // Fare calculation: RM 1 per kilometer (no base fare)
+      const fare = distanceInKm * 1.0;
+
+      console.log('Fare calculated:', { distanceInKm, fare });
+
+      setEstimatedFare(fare.toFixed(2));
+      toast.success(`Estimated fare: RM ${fare.toFixed(2)} (${distanceInKm.toFixed(1)} km)`);
+    } catch (error) {
+      console.error('Error calculating fare:', error);
+      toast.error(`Failed to calculate fare: ${error.message}`);
+    }
+  };
             destinations: [{ lat: dropoff.lat, lng: dropoff.lng }],
             travelMode: window.google.maps.TravelMode.DRIVING,
             unitSystem: window.google.maps.UnitSystem.METRIC,
@@ -311,6 +367,11 @@ const PassengerDashboard = () => {
             <div className="lg:col-span-2">
               <div className="bg-white rounded-lg shadow p-6" style={{ overflow: 'visible' }}>
                 <h2 className="text-2xl font-bold text-gray-800 mb-6">Search & Book Ride</h2>
+                {!googleMapsLoaded && (
+                  <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg mb-4">
+                    <p className="text-sm">⏳ Loading Google Maps... Please wait.</p>
+                  </div>
+                )}
                 <div className="space-y-4" style={{ overflow: 'visible' }}>
                   <div style={{ overflow: 'visible' }}>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -334,9 +395,14 @@ const PassengerDashboard = () => {
                   </div>
                   <button
                     onClick={calculateFare}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition"
+                    disabled={!googleMapsLoaded || !pickupLocation || !dropoffLocation}
+                    className={`w-full font-semibold py-3 rounded-lg transition ${
+                      !googleMapsLoaded || !pickupLocation || !dropoffLocation
+                        ? 'bg-gray-400 cursor-not-allowed'
+                        : 'bg-blue-600 hover:bg-blue-700 text-white'
+                    }`}
                   >
-                    Search Rides
+                    {!googleMapsLoaded ? 'Loading Maps...' : 'Search Rides'}
                   </button>
                 </div>
               </div>
